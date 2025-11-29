@@ -88,6 +88,18 @@ class MongoDB:
 
         return result
 
+    def upsert_space_many_company_infos(self, list_company_infos):
+        bulk_updates = []
+        for company_infos in list_company_infos:
+            update_request = UpdateOne(
+                {"_id": company_infos.get('_id')},
+                {"$set": company_infos},
+                upsert=True
+            )
+            bulk_updates.append(update_request)
+        if bulk_updates:
+            self._company_infos.bulk_write(bulk_updates, ordered=False)
+            
     def upsert_space_many_news(self, list_news):
         bulk_updates = []
         for new in list_news:

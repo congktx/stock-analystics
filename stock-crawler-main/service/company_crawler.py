@@ -19,7 +19,7 @@ def get_company_infos(date: str = "2024-12-01", exchange = 'XNAS'):
         "exchange": exchange,
         "active": "true",
         "order": "asc",
-        "limit": "100",
+        "limit": "1000",
         "sort": "ticker",
         "date": date,
     }
@@ -72,10 +72,10 @@ def polygon_get_next_url(cursor: str):
         return [], None
 
 def load_all_company_infos_to_db(list_company_infos, time_update):
-    tmp = parse_date_to_timestamp("2024-12-01")
+    list_document = []
     for company_infos in list_company_infos:
         document = {
-            "_id": company_infos.get('ticker') + '_' + str(tmp),
+            "_id": company_infos.get('ticker') + '_' + str(time_update),
             "ticker": company_infos.get('ticker'),
             "name": company_infos.get('name'),
             "market": company_infos.get('market'),
@@ -90,8 +90,10 @@ def load_all_company_infos_to_db(list_company_infos, time_update):
             "time_update": time_update
         }
         
-        mongodb.upsert_space_company(document)
-        time.sleep(0.1)
+        list_document.append(document)
+        
+    mongodb.upsert_space_many_company_infos(list_document)
+    time.sleep(0.1)
 
 def crawl_all_company(date: str = "2024-12-01", list_exchage = ['XNAS', 'XNYS']):
     time_update = parse_date_to_timestamp(date)
@@ -108,7 +110,6 @@ def crawl_all_company(date: str = "2024-12-01", list_exchage = ['XNAS', 'XNYS'])
             load_all_company_infos_to_db(list_company_infos, time_update)
             time.sleep(12)
 
-    print(time_update, num_docs)
     mongodb.upsert_last_completed_timestamp(mongodb._company_infos, time_update)
     
     

@@ -1,48 +1,40 @@
-"""
-OHLC Data Processing Job for Apache Flink
-Processes OHLC (Open, High, Low, Close) data from Kafka and computes:
-- Technical indicators (SMA, EMA, RSI, MACD)
-- Price change metrics
-- Volume analysis
-- Time-windowed aggregations
-"""
 import json
 import logging
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
 from collections import deque
 
+try:
+    from pyflink.datastream import StreamExecutionEnvironment
+    from pyflink.datastream.window import TumblingEventTimeWindows
+    from pyflink.datastream.functions import AggregateFunction
+    from pyflink.datastream.connectors.kafka import KafkaSource
+    from pyflink.common import Time
+    PYFLINK_AVAILABLE = True
+except ImportError:
+    PYFLINK_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
 class OHLCProcessor:
     """
-    Process OHLC data stream and compute technical indicators
+    Process OHLC data stream
     """
     
     def __init__(self):
         self.price_history = {}  # ticker -> deque of prices
-        self.max_history = 200  # Keep up to 200 data points
+        self.max_history = 200  
     
     def process_ohlc(self, ohlc_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process OHLC data and add technical indicators
-        
-        Args:
-            ohlc_data: Raw OHLC data
-        
-        Returns:
-            Enriched OHLC data with indicators
-        """
         try:
             ticker = ohlc_data.get('ticker')
             close_price = float(ohlc_data.get('c', 0))
             
-            # Initialize history for this ticker if needed
+            # Initialize history 
             if ticker not in self.price_history:
                 self.price_history[ticker] = deque(maxlen=self.max_history)
             
-            # Add current price to history
             self.price_history[ticker].append(close_price)
             
             enriched_data = {
@@ -51,7 +43,6 @@ class OHLCProcessor:
                 'technical_indicators': {}
             }
             
-            # Calculate technical indicators
             history = list(self.price_history[ticker])
             
             if len(history) >= 20:
@@ -73,7 +64,7 @@ class OHLCProcessor:
                     'histogram': histogram
                 }
             
-            # Calculate price change metrics
+            # Calculate price change 
             if len(history) >= 2:
                 prev_price = history[-2]
                 price_change = close_price - prev_price
@@ -85,7 +76,7 @@ class OHLCProcessor:
                     'volatility': self._calculate_volatility(history[-20:]) if len(history) >= 20 else None
                 }
             
-            # Volume analysis
+            # Volume 
             volume = float(ohlc_data.get('v', 0))
             enriched_data['volume_metrics'] = {
                 'volume': volume,
@@ -99,13 +90,11 @@ class OHLCProcessor:
             return ohlc_data
     
     def _calculate_sma(self, prices: List[float], period: int) -> Optional[float]:
-        """Calculate Simple Moving Average"""
         if len(prices) < period:
             return None
         return round(sum(prices[-period:]) / period, 2)
     
     def _calculate_ema(self, prices: List[float], period: int) -> Optional[float]:
-        """Calculate Exponential Moving Average"""
         if len(prices) < period:
             return None
         
@@ -118,7 +107,6 @@ class OHLCProcessor:
         return round(ema, 2)
     
     def _calculate_rsi(self, prices: List[float], period: int = 14) -> Optional[float]:
-        """Calculate Relative Strength Index"""
         if len(prices) < period + 1:
             return None
         
@@ -198,17 +186,6 @@ class OHLCProcessor:
         ohlc_items: List[Dict[str, Any]],
         aggregation_period: str = '1H'
     ) -> Dict[str, Any]:
-        """
-        Aggregate OHLC data for a ticker over time window
-        
-        Args:
-            ticker: Stock ticker symbol
-            ohlc_items: List of OHLC data points
-            aggregation_period: Aggregation period (e.g., '1H', '1D')
-        
-        Returns:
-            Aggregated OHLC data
-        """
         if not ohlc_items:
             return {}
         
@@ -244,44 +221,69 @@ class OHLCProcessor:
         }
 
 
-# PyFlink job template
+class OHLCAggregator(AggregateFunction):
+    """
+    Aggregate OHLC data by ticker and time window
+    """
+    
+    def create_accumulator(self) -> List[Dict[str, Any]]:
+        return []
+    
+    def add(self, value: Dict[str, Any], accumulator: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        accumulator.append(value)
+        return accumulator
+    
+    def get_result(self, accumulator: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if not accumulator:
+            return {}
+        
+        # Sort by timestamp
+        sorted_items = sorted(accumulator, key=lambda x: x.get('t', 0))
+        ticker = sorted_items[0].get('ticker', 'UNKNOWN')
+        
+        # Extract prices and volumes
+        opens = [float(item.get('o', 0)) for item in sorted_items]
+        highs = [float(item.get('h', 0)) for item in sorted_items]
+        lows = [float(item.get('l', 0)) for item in sorted_items]
+        closes = [float(item.get('c', 0)) for item in sorted_items]
+        volumes = [float(item.get('v', 0)) for item in sorted_items]
+        
+        return {
+            'ticker': ticker,
+            'start_timestamp': sorted_items[0].get('t'),
+            'end_timestamp': sorted_items[-1].get('t'),
+            'open': opens[0],
+            'high': max(highs),
+            'low': min(lows),
+            'close': closes[-1],
+            'volume': sum(volumes),
+            'bar_count': len(sorted_items),
+            'avg_price': round(sum(closes) / len(closes), 2),
+            'aggregated_at': datetime.now().isoformat()
+        }
+    
+    def merge(self, acc_a: List[Dict[str, Any]], acc_b: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return acc_a + acc_b
+
+
+class MongoDBSink:
+    
+    def __init__(self, connection_string: Optional[str] = None, database: str = "stock_data", collection: str = "ohlc_aggregated"):
+        self.connection_string = connection_string
+        self.database = database
+        self.collection = collection
+
+
 def create_ohlc_processing_job():
-    """
-    Create Flink streaming job for OHLC processing
-    This is a template - requires PyFlink to be installed
-    """
     
-    print("""
-    # PyFlink OHLC Processing Job Template
-    
-    from pyflink.datastream import StreamExecutionEnvironment
-    from pyflink.datastream.window import TumblingEventTimeWindows
-    from pyflink.common import Time
+    if not PYFLINK_AVAILABLE:
+        logger.error("PyFlink is not available. ")
+        return None
     
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(6)
     
-    # Kafka source
-    ohlc_stream = env.add_source(FlinkKafkaConsumer(...))
-    
-    # Process OHLC data
-    processor = OHLCProcessor()
-    
-    processed_stream = ohlc_stream.map(
-        lambda x: processor.process_ohlc(json.loads(x))
-    )
-    
-    # Aggregate by ticker with 1-hour tumbling window
-    aggregated_stream = processed_stream \
-        .key_by(lambda x: x['ticker']) \
-        .window(TumblingEventTimeWindows.of(Time.hours(1))) \
-        .aggregate(OHLCAggregator())
-    
-    # Sink to MongoDB
-    aggregated_stream.add_sink(MongoDBSink())
-    
-    env.execute("OHLC Processing Job")
-    """)
+    return env
 
 
 if __name__ == "__main__":
@@ -305,8 +307,6 @@ if __name__ == "__main__":
         processed = processor.process_ohlc(test_ohlc)
     
     print("Last processed OHLC:", json.dumps(processed, indent=2))
-    
-    # Test aggregation
     ohlc_items = [test_ohlc for _ in range(5)]
     aggregated = processor.aggregate_ohlc_by_ticker('AAPL', ohlc_items, '1H')
     print("\nAggregated OHLC:", json.dumps(aggregated, indent=2))

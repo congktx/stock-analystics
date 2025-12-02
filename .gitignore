@@ -7,3 +7,6 @@ data/
 !data/ohlc_remain/.gitkeep
 !data/news_remain/.gitkeep
 __pycache__/
+.airflow_venv
+.airflow_win
+.airflow

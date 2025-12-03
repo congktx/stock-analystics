@@ -49,7 +49,7 @@ def test(sql: str):
 def delete_schema():
     conn = GlobalConfig.CONN
     cursor = conn.cursor()
-    cursor.execute("DROP SCHEMA datasource CASCADE")
+    cursor.execute("DROP SCHEMA IF EXISTS datasource CASCADE")
 
     conn.commit()
     print("Execute OK")

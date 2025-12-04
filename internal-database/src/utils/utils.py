@@ -39,6 +39,19 @@ def _init_env():
     GlobalConfig.MARKETS_TABLE_PATH = os.path.join(GlobalConfig.ROOT, GlobalConfig.MARKETS_TABLE_PATH)
     GlobalConfig.MARKET_STATUS_TABLE_PATH = os.path.join(GlobalConfig.ROOT, GlobalConfig.MARKET_STATUS_TABLE_PATH)
     GlobalConfig.COMPANY_STATUS_TABLE_PATH = os.path.join(GlobalConfig.ROOT, GlobalConfig.COMPANY_STATUS_TABLE_PATH)
+    
+    # Ensure directories exist
+    for path in [
+        GlobalConfig.MARKET_STATUS_PATH,
+        GlobalConfig.COMPANY_INFOS_PATH,
+        GlobalConfig.EXCHANGES_TABLE_PATH,
+        GlobalConfig.COMPANIES_TABLE_PATH,
+        GlobalConfig.MARKETS_TABLE_PATH,
+        GlobalConfig.MARKET_STATUS_TABLE_PATH,
+        GlobalConfig.COMPANY_STATUS_TABLE_PATH
+    ]:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
     GlobalConfig.CONN = get_conn()
     if GlobalConfig.CONN is None:
         print("CRITICAL ERROR: Failed to establish database connection. Exiting.")

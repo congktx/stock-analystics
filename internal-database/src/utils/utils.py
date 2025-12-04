@@ -51,12 +51,49 @@ def _init_env():
         GlobalConfig.COMPANY_STATUS_TABLE_PATH
     ]:
         os.makedirs(os.path.dirname(path), exist_ok=True)
+    
+    _generate_seed_data()
 
     GlobalConfig.CONN = get_conn()
     if GlobalConfig.CONN is None:
         print("CRITICAL ERROR: Failed to establish database connection. Exiting.")
         # We might want to raise an exception or exit here, but for now just printing.
         # Ideally, the caller should handle this.
+
+def _generate_seed_data():
+    """Generates default seed data for CSV files if they are missing."""
+    
+    # Markets
+    if not os.path.exists(GlobalConfig.MARKETS_TABLE_PATH):
+        print(f"Generating seed data for {GlobalConfig.MARKETS_TABLE_PATH}...")
+        with open(GlobalConfig.MARKETS_TABLE_PATH, 'w') as f:
+            f.write("market_region,market_type,market_local_close,market_local_open\n")
+            f.write("US,Stock,16:00,09:30\n")
+            f.write("VN,Stock,15:00,09:00\n")
+            f.write("JP,Stock,15:00,09:00\n")
+            f.write("UK,Stock,16:30,08:00\n")
+            f.write("DE,Stock,17:30,09:00\n")
+
+    # Exchanges
+    if not os.path.exists(GlobalConfig.EXCHANGES_TABLE_PATH):
+        print(f"Generating seed data for {GlobalConfig.EXCHANGES_TABLE_PATH}...")
+        with open(GlobalConfig.EXCHANGES_TABLE_PATH, 'w') as f:
+            f.write("exchange_mic,exchange_region,exchange_name\n")
+            f.write("XNYS,US,New York Stock Exchange\n")
+            f.write("XNAS,US,NASDAQ\n")
+            f.write("XSTC,VN,Ho Chi Minh City Stock Exchange\n")
+            f.write("XHNX,VN,Hanoi Stock Exchange\n")
+            f.write("XTKS,JP,Tokyo Stock Exchange\n")
+            f.write("XLON,UK,London Stock Exchange\n")
+            f.write("XFRA,DE,Frankfurt Stock Exchange\n")
+
+    # Market Status
+    if not os.path.exists(GlobalConfig.MARKET_STATUS_TABLE_PATH):
+        print(f"Generating seed data for {GlobalConfig.MARKET_STATUS_TABLE_PATH}...")
+        with open(GlobalConfig.MARKET_STATUS_TABLE_PATH, 'w') as f:
+            f.write("market_status_region,market_status_time_update,market_status_current_status\n")
+            f.write("US,1700000000,Open\n")
+            f.write("VN,1700000000,Closed\n")
 
 
 def get_conn():

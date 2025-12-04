@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Tuple
 import requests, json
 from pprint import pprint
+import os
 import pandas as pd
 from tqdm import tqdm
 from utils.utils import (import_companies_table,
@@ -28,6 +29,9 @@ def date_to_timestamps(year: int, month: int) -> Tuple[int, int]:
 
 def process_input_data():
     conn = GlobalConfig.CONN
+    if conn is None:
+        print("Database connection is not available.")
+        return
     cursor = conn.cursor()
 
     cursor.execute(query="""SELECT company_ticker from datasource.companies""")
@@ -52,7 +56,7 @@ def pull_company_infos(year: int, month: int):
 
     page_id = 1
 
-    url = "http://localhost:8000/stock/company-infos"
+    url = f"{GlobalConfig.API_URL}/stock/company-infos"
     params = {
         "from_timestamp": start_ts,
         "to_timestamp": end_ts,
@@ -62,7 +66,9 @@ def pull_company_infos(year: int, month: int):
 
     results = []
     try:
-        res:dict = requests.get(url=url, params=params).json()
+        response = requests.get(url=url, params=params)
+        response.raise_for_status() # Check for HTTP errors
+        res:dict = response.json()
 
         results += res.get("documents")
 
@@ -71,7 +77,9 @@ def pull_company_infos(year: int, month: int):
         for page_id in tqdm(range(2, page_count + 1), desc="Fetching pages", unit="page"):
             try:
                 params["page"] = page_id
-                res = requests.get(url=url, params=params).json()
+                response = requests.get(url=url, params=params)
+                response.raise_for_status()
+                res = response.json()
 
                 docs = res.get("documents", [])
                 if docs:
@@ -81,6 +89,11 @@ def pull_company_infos(year: int, month: int):
     except Exception as e:
         print(f"Error while fetching data: {e} -> {page_id}")
     
+
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(GlobalConfig.COMPANY_INFOS_PATH), exist_ok=True)
+
     with open(GlobalConfig.COMPANY_INFOS_PATH, mode="w", encoding="utf-8") as file:
         json.dump(results, file, ensure_ascii=False, indent=4)
     

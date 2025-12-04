@@ -17,4 +17,5 @@ _init_env()
 
 pull_company_infos(year=2025, month=10)
 test(sql="SELECT count(*) FROM datasource.company_status")
-GlobalConfig.CONN.close()
+if GlobalConfig.CONN:
+    GlobalConfig.CONN.close()

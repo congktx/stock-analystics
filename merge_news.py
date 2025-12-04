@@ -46,7 +46,7 @@ def add_new_columns(new_cols):
 
 
 first_write = not os.path.exists(OUTPUT_CSV)
-cnt_obj = 455525
+cnt_obj = 560654
 
 with open(OUTPUT_CSV, "a", newline="", encoding="utf-8") as csvfile:
 

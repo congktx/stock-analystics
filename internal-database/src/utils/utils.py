@@ -107,17 +107,15 @@ def import_companies_table():
         print("Database connection is not available.")
         return
     cursor = conn.cursor()
-    cursor.execute(query=f"""COPY datasource.companies(company_ticker,
-                                                        company_cik,
-                                                        company_composite_figi,
-                                                        company_market_locale,
-                                                        company_share_class_figi,
-                                                        company_asset_type,
-                                                        company_name)
-                            FROM '{GlobalConfig.COMPANIES_TABLE_PATH}'
-                            DELIMITER ','
-                            CSV HEADER;
-                        """)
+    with open(GlobalConfig.COMPANIES_TABLE_PATH, 'r') as f:
+        cursor.copy_expert(sql="""COPY datasource.companies(company_ticker,
+                                                            company_cik,
+                                                            company_composite_figi,
+                                                            company_market_locale,
+                                                            company_share_class_figi,
+                                                            company_asset_type,
+                                                            company_name)
+                                FROM STDIN WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',')""", file=f)
     conn.commit()
     print("Execute OK")
 
@@ -128,14 +126,12 @@ def import_markets_table():
         return
     cursor = conn.cursor()
 
-    cursor.execute(query=f"""COPY datasource.markets(market_region,
-                                                    market_type,
-                                                    market_local_close,
-                                                    market_local_open)
-                            FROM '{GlobalConfig.MARKETS_TABLE_PATH}'
-                            DELIMITER ','
-                            CSV HEADER;
-                        """)
+    with open(GlobalConfig.MARKETS_TABLE_PATH, 'r') as f:
+        cursor.copy_expert(sql="""COPY datasource.markets(market_region,
+                                                        market_type,
+                                                        market_local_close,
+                                                        market_local_open)
+                                FROM STDIN WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',')""", file=f)
     conn.commit()
     print("Execute OK")
 
@@ -146,13 +142,11 @@ def import_market_status_table():
         return
     cursor = conn.cursor()
 
-    cursor.execute(query=f"""COPY datasource.market_status(market_status_region,
-                                                            market_status_time_update,
-                                                            market_status_current_status)
-                            FROM '{GlobalConfig.MARKET_STATUS_TABLE_PATH}'
-                            DELIMITER ','
-                            CSV HEADER;
-                        """)
+    with open(GlobalConfig.MARKET_STATUS_TABLE_PATH, 'r') as f:
+        cursor.copy_expert(sql="""COPY datasource.market_status(market_status_region,
+                                                                market_status_time_update,
+                                                                market_status_current_status)
+                                FROM STDIN WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',')""", file=f)
     conn.commit()
     print("Execute OK")
 
@@ -162,13 +156,11 @@ def import_exchanges_table():
         print("Database connection is not available.")
         return
     cursor = conn.cursor()
-    cursor.execute(query=f"""COPY datasource.exchanges(exchange_mic,
-                                                        exchange_region,
-                                                        exchange_name)
-                            FROM '{GlobalConfig.EXCHANGES_TABLE_PATH}'
-                            DELIMITER ','
-                            CSV HEADER;
-                        """)
+    with open(GlobalConfig.EXCHANGES_TABLE_PATH, 'r') as f:
+        cursor.copy_expert(sql="""COPY datasource.exchanges(exchange_mic,
+                                                            exchange_region,
+                                                            exchange_name)
+                                FROM STDIN WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',')""", file=f)
     conn.commit()
     print("Execute OK")
 
@@ -179,14 +171,12 @@ def import_company_status_table():
         return
     cursor = conn.cursor()
 
-    cursor.execute(query=f"""COPY datasource.company_status(company_status_ticker,
-                                                            company_status_primary_exchange,
-                                                            company_status_time_update,
-                                                            company_status_type,
-                                                            company_status_active)
-                            FROM '{GlobalConfig.COMPANY_STATUS_TABLE_PATH}'
-                            DELIMITER ','
-                            CSV HEADER;
-                        """)
+    with open(GlobalConfig.COMPANY_STATUS_TABLE_PATH, 'r') as f:
+        cursor.copy_expert(sql="""COPY datasource.company_status(company_status_ticker,
+                                                                company_status_primary_exchange,
+                                                                company_status_time_update,
+                                                                company_status_type,
+                                                                company_status_active)
+                                FROM STDIN WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',')""", file=f)
     conn.commit()
     print("Execute OK")

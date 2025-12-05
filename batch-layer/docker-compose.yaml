@@ -1,6 +1,6 @@
 services:
     airflow:
-        image: airflow:v0
+        image: loind31/airflow:v0
         ports:
           - 8080:8080
         environment:
@@ -97,7 +97,7 @@ services:
         environment:
             - POSTGRES_USER=airflow
             - POSTGRES_PASSWORD=airflow
-            - POSTGRES_DB=test
+            - POSTGRES_DB=airflow
         ports:
             - 5433:5432
         volumes:

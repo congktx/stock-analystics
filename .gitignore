@@ -1,5 +1,6 @@
 .venv/
 data/
+.data
 !data/company/.gitkeep
 !data/market/.gitkeep
 !data/news/.gitkeep

@@ -38,6 +38,8 @@ services:
             hdfs dfs -mkdir -p /workspace/hive/data/warehouse || echo 'Warehouse already exists.';
             hdfs dfs -chmod 777 /workspace/hive/data/warehouse;
 
+            hdfs dfs -mkdir -p /airflow/data/ || echo 'Airflow data directory already exists.';
+            hdfs dfs -chmod 777 /airflow/data/;
             mkdir -p /workspace/spark-events;
             echo 'spark.eventLog.enabled true' > /workspace/spark/conf/spark-defaults.conf;
             echo 'spark.eventLog.dir file:/workspace/spark-events' >> /workspace/spark/conf/spark-defaults.conf;

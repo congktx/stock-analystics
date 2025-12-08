@@ -16,11 +16,11 @@
 <configuration>
   <property>
     <name>yarn.resourcemanager.hostname</name>
-    <value>resourcemanager</value>
+    <value>namenode</value>
   </property>
   <property>
     <name>yarn.resourcemanager.webapp.address</name>
-    <value>resourcemanager:8088</value>
+    <value>namenode:8088</value>
   </property>
     <property>
     <name>yarn.nodemanager.pmem-check-enabled</name>

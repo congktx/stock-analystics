@@ -1,8 +1,0 @@
-{"timestamp":"2025-12-08T03:43:05.545012Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
-{"timestamp":"2025-12-08T03:43:05.547135Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
-{"timestamp":"2025-12-08T03:43:59.026070Z","level":"info","event":"Error while pull ohlc data Unable to find a usable engine; tried using: 'pyarrow', 'fastparquet'.","logger":"task.stdout"}
-{"timestamp":"2025-12-08T03:43:59.027757Z","level":"info","event":"A suitable version of pyarrow or fastparquet is required for parquet support.","logger":"task.stdout"}
-{"timestamp":"2025-12-08T03:43:59.028090Z","level":"info","event":"Trying to import the above resulted in these errors:","logger":"task.stdout"}
-{"timestamp":"2025-12-08T03:43:59.028351Z","level":"info","event":" - Missing optional dependency 'pyarrow'. pyarrow is required for parquet support. Use pip or conda to install pyarrow.","logger":"task.stdout"}
-{"timestamp":"2025-12-08T03:43:59.028529Z","level":"info","event":" - Missing optional dependency 'fastparquet'. fastparquet is required for parquet support. Use pip or conda to install fastparquet.-> page 1","logger":"task.stdout"}
-{"timestamp":"2025-12-08T03:43:59.026284Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}

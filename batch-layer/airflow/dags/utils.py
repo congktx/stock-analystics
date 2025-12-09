@@ -32,7 +32,7 @@ def pull_daily_data(from_timestamp: int, to_timestamp: int):
     params = {
         "from_timestamp": from_timestamp,
         "to_timestamp": to_timestamp,
-        "limit": 200,
+        "limit": 2000,
         "page": 1
     }
 
@@ -63,8 +63,9 @@ def pull_daily_data(from_timestamp: int, to_timestamp: int):
         df = pd.DataFrame(results)
         if "timestamp" in df.columns:
             df = df.drop(columns=["timestamp"])
-        df.to_csv("data/output.csv",index=False, header=True)
-        df.to_parquet('data/output.parquet', index=False)
+        df['ticker'] = df['ticker'].astype(str)
+        df.to_csv("/workspace/airflow/data/output.csv",index=False, header=True)
+        df.to_parquet('/workspace/airflow/data/output.parquet', index=False)
         
     except Exception as e:
         print(f"Error while pull ohlc data {e}-> page 1")

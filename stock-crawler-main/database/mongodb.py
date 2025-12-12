@@ -11,7 +11,6 @@ load_dotenv()
 
 logger = logging.getLogger("mongodb")
 
-
 class MongoDB:
     def __init__(self, connection_url=None):
         if not connection_url:
@@ -29,6 +28,7 @@ class MongoDB:
         self._market_status = self.get_collection('market_status')
         self._news_sentiment = self.get_collection('news_sentiment')
         self._OHLC = self.get_collection('OHLC')
+        self._more_company_infos = self.get_collection('more_company_infos')
 
     def get_collection(self, collection_name):
         return self.db[collection_name]
@@ -125,3 +125,16 @@ class MongoDB:
 
         if bulk_updates:
             self._OHLC.bulk_write(bulk_updates, ordered=False)
+    
+    def upsert_space_many_more_company_infos(self, list_more_company_infos):
+        bulk_updates = []
+        for more_company_infos in list_more_company_infos:
+            update_request = UpdateOne(
+                {"ticker": more_company_infos.get('ticker')},
+                {"$set": more_company_infos},
+                upsert=True
+            )
+            bulk_updates.append(update_request)
+
+        if bulk_updates:
+            self._more_company_infos.bulk_write(bulk_updates, ordered=False)

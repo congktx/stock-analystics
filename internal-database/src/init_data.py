@@ -10,7 +10,7 @@ from utils.utils import _init_env, import_companies_table
 
 
 _init_env()
-delete_schema()
+# delete_schema()
 init_db()
 import_markets_table()
 import_market_status_table()

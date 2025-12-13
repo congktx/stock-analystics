@@ -14,7 +14,9 @@ def init_db():
                                 company_market_locale VARCHAR(50),
                                 company_share_class_figi VARCHAR(50),
                                 company_asset_type VARCHAR(50),
-                                company_name VARCHAR(255)
+                                company_name VARCHAR(255),
+                                company_sic_code VARCHAR(50),
+                                company_industry VARCHAR(255)
                             );""")
 
     cursor.execute(query="""CREATE TABLE datasource.markets(

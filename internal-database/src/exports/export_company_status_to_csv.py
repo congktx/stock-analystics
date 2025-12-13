@@ -9,7 +9,9 @@ def export_data_of_companies_table() -> None:
               "company_market_locale",
               "company_share_class_figi",
               "company_asset_type",
-              "company_name"]
+              "company_name",
+              "company_sic_code",
+              "company_industry"]
     
     with open(GlobalConfig.COMPANY_INFOS_PATH, mode="r", encoding="utf-8") as original_data_file:
         data = json.load(original_data_file)
@@ -28,6 +30,8 @@ def export_data_of_companies_table() -> None:
                 company_share_class_figi = item.get("share_class_figi")
                 company_asset_type = item.get("market")
                 company_name = item.get("name")
+                company_sic_code = item.get("sic_code")
+                company_sic_description = item.get("sic_description")
 
                 row = [company_ticker,
                        company_cik,
@@ -35,7 +39,9 @@ def export_data_of_companies_table() -> None:
                        company_market_locale,
                        company_share_class_figi,
                        company_asset_type,
-                       company_name]
+                       company_name,
+                       company_sic_code,
+                       company_sic_description]
                 
                 csv_writer.writerow(row)
 

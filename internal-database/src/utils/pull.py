@@ -56,7 +56,7 @@ def pull_company_infos(year: int, month: int):
     params = {
         "from_timestamp": start_ts,
         "to_timestamp": end_ts,
-        "limit": 100,
+        "limit": 1000,
         "page": page_id
     }
 

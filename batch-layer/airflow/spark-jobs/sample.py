@@ -6,7 +6,7 @@ spark = SparkSession.builder\
                     .getOrCreate()
 spark
 
-jdbc_url = "jdbc:sqlserver://172.21.64.1:1433;databaseName=test;encrypt=false"
+jdbc_url = "jdbc:sqlserver://172.22.240.1:1433;databaseName=test;encrypt=false"
 
 properties = {
     "user": "user",

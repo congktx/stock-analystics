@@ -71,7 +71,9 @@ def import_companies_table():
                                                         company_market_locale,
                                                         company_share_class_figi,
                                                         company_asset_type,
-                                                        company_name)
+                                                        company_name,
+                                                        company_sic_code,
+                                                        company_industry)
                             FROM '{GlobalConfig.COMPANIES_TABLE_PATH}'
                             DELIMITER ','
                             CSV HEADER;

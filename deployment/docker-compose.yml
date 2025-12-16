@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  # Zookeeper - Required for Kafka coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  # Kafka UI for monitoring
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+  # Flink Job Manager
+  flink-jobmanager:
+    image: flink:1.18-scala_2.12
+    container_name: flink-jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        parallelism.default: 4
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        state.savepoints.dir: file:///tmp/flink-savepoints
+        execution.checkpointing.interval: 60000
+        execution.checkpointing.mode: EXACTLY_ONCE
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+      - flink-savepoints:/tmp/flink-savepoints
+
+  # Flink Task Manager
+  flink-taskmanager:
+    image: flink:1.18-scala_2.12
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    deploy:
+      replicas: 2
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 4
+        taskmanager.memory.process.size: 2048m
+    volumes:
+      - flink-checkpoints:/tmp/flink-checkpoints
+      - flink-savepoints:/tmp/flink-savepoints
+
+  # MongoDB (if not already running locally)
+  # mongodb:
+  #   image: mongo:7.0
+  #   container_name: mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     MONGO_INITDB_DATABASE: stock_data
+  #   volumes:
+  #     - mongodb-data:/data/db
+
+  # TimescaleDB - Analytical time-series database
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: stock_analytics
+      POSTGRES_PASSWORD: stock_password
+      POSTGRES_DB: stock_analytics
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+      - ./scripts/init-timescaledb.sql:/docker-entrypoint-initdb.d/init.sql
+    command: postgres -c shared_preload_libraries=timescaledb
+
+  # Redis - Caching and real-time state
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:
+  flink-checkpoints:
+  flink-savepoints:
+  timescaledb-data:
+  redis-data:
+  # mongodb-data:
+
+networks:
+  default:
+    name: stock-analytics-network

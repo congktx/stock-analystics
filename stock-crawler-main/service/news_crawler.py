@@ -3,6 +3,7 @@ import time
 import json
 import os
 import requests
+import logging
 
 from config import AlphavantageConfig, AssignedCompaniesConfig
 
@@ -15,6 +16,7 @@ from utils.time_utils import timestamp_to_YYYYMMDDTHHMM
 from utils.json_file import load_json_file, save_json_file
 
 mongodb = MongoDB()
+kafka_producer = get_producer()
 
 def get_news_sentiment(tickers, from_timestamp, to_timestamp):
     url = 'https://www.alphavantage.co/query'
@@ -42,6 +44,17 @@ def get_news_sentiment(tickers, from_timestamp, to_timestamp):
     
     try:
         response = requests.get(url, params=params, headers=headers).json()
+        
+        # Kiểm tra lỗi từ API
+        if response.get('Information'):
+            # API trả về thông báo lỗi
+            if 'rate limit' in response.get('Information', '').lower():
+                print(f"⚠️ Rate limit: {response.get('Information')}")
+            elif 'invalid' in response.get('Information', '').lower():
+                # Ticker không hợp lệ, bỏ qua không in lỗi
+                pass
+            return []
+        
         if not response.get('feed'):
             if response.get('Information') and "rate limit" in response.get('Information'):
                 return "rate limit"

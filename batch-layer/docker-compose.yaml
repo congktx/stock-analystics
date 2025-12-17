@@ -84,6 +84,8 @@ services:
         image: loind31/hdfs-spark-base-img:v0
         hostname: datanode-nodemanager-1
         container_name: datanode-nodemanager-1
+        ports:
+            - 8043:8042
         command: ["/bin/bash", "-c", "hdfs --daemon start datanode; yarn --daemon start nodemanager; sleep 3; tail -f /dev/null"]
         volumes:
             - ./hdfs-spark/connector/mssql-jdbc-12.2.0.jre11.jar:/workspace/spark/jars/mssql-jdbc-12.2.0.jre11.jar
@@ -95,6 +97,8 @@ services:
         image: loind31/hdfs-spark-base-img:v0
         hostname: datanode-nodemanager-2
         container_name: datanode-nodemanager-2
+        ports:
+            - 8044:8042
         command: ["/bin/bash", "-c", "hdfs --daemon start datanode; yarn --daemon start nodemanager; sleep 3; tail -f /dev/null"]
         volumes:
             - ./hdfs-spark/connector/mssql-jdbc-12.2.0.jre11.jar:/workspace/spark/jars/mssql-jdbc-12.2.0.jre11.jar

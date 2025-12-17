@@ -69,6 +69,31 @@ CREATE TABLE fact_news_topic (
     news_topic_relevant_score FLOAT
 );
 
+CREATE TABLE stg_dim_time (
+    time_id          BIGINT NOT NULL PRIMARY KEY,
+    time_date        DATE NOT NULL,
+    time_day_of_week TINYINT,
+    time_month       TINYINT,
+    time_quarter     TINYINT,
+    time_year        SMALLINT
+);
+
+CREATE TABLE stg_dim_topics (
+    topic_id   BIGINT NOT NULL PRIMARY KEY,
+    topic_name NVARCHAR(255) NOT NULL
+);
+
+CREATE TABLE stg_dim_news (
+    news_id                     BIGINT NOT NULL PRIMARY KEY,
+    news_time_id                BIGINT NOT NULL ,
+    overall_score               FLOAT,
+    news_title                  NVARCHAR(MAX),
+    news_summary                NVARCHAR(MAX),
+    news_category_within_score  FLOAT,
+    news_source                 NVARCHAR(255),
+    news_time_published         DATETIME2
+);
+
 DROP TABLE IF EXISTS fact_news_topic;
 DROP TABLE IF EXISTS fact_news_companies;
 DROP TABLE IF EXISTS fact_candles;

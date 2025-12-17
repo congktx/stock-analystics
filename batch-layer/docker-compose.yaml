@@ -40,6 +40,9 @@ services:
             hdfs dfs -chmod 777 /workspace/hive/data/warehouse;
 
             hdfs dfs -mkdir -p /airflow/data/ || echo 'Airflow data directory already exists.';
+            hdfs dfs -mkdir -p /airflow/data/ohlc || echo 'OHLC directory already exists.';
+            hdfs dfs -mkdir -p /airflow/data/companies || echo 'Companies directory already exists.';
+            hdfs dfs -mkdir -p /airflow/data/news || echo 'News directory already exists.';
             hdfs dfs -chmod 777 /airflow/data/;
             mkdir -p /workspace/spark-events;
             echo 'spark.eventLog.enabled true' > /workspace/spark/conf/spark-defaults.conf;
@@ -72,6 +75,7 @@ services:
             - ./hdfs-spark/config/common/core-site.xml:/workspace/hadoop/etc/hadoop/core-site.xml
             - ./hdfs-spark/config/common/mapred-site.xml:/workspace/hadoop/etc/hadoop/mapred-site.xml
             - ./hdfs-spark/config/common/yarn-site.xml:/workspace/hadoop/etc/hadoop/yarn-site.xml
+            - ./hdfs-spark/local-data:/workspace/hadoop/local-data
             - script-src:/workspace/src
         depends_on:
             - datanode-nodemanager-1
@@ -112,3 +116,5 @@ services:
 volumes:
     # postgres_data:
     script-src:
+# hdfs dfs -put /workspace/hadoop/local-data/ohlc /airflow/data
+# hdfs dfs -put /workspace/hadoop/local-data/companies /airflow/data

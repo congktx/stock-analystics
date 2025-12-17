@@ -1,0 +1,7 @@
+{"timestamp":"2025-12-16T17:35:09.846286Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T17:35:41.172259Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T17:36:11.765749Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T17:36:42.454153Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T17:37:14.633501Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T17:37:47.619539Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T17:38:20.208568Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/update_dim_companies.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}

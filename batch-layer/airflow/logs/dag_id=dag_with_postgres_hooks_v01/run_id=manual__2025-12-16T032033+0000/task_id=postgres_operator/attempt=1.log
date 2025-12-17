@@ -1,0 +1,4 @@
+{"timestamp":"2025-12-16T03:20:38.018955Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-16T03:20:38.020922Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/dag_with_postgres_hooks.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-16T03:20:38.699660Z","level":"info","event":"Saved orders data in text file get_orders.txt","logger":"root","filename":"dag_with_postgres_hooks.py","lineno":32}
+{"timestamp":"2025-12-16T03:20:38.700179Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}

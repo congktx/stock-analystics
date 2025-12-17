@@ -1,8 +1,13 @@
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from psycopg2.extensions import cursor as Cursor
 from datetime import datetime
 from config import GlobalConfig
+import pandas as pd
 import requests
 import json
 import pandas as pd
+import csv
+import logging
 
 def date_to_timestamp(year: int, 
                  month: int, 
@@ -22,7 +27,7 @@ def date_to_timestamp(year: int,
 def make_date(year: int, month: int, day: int) -> str:
     return f"{year:04d}-{month:02d}-{day:02d}"
 
-def pull_daily_data(from_timestamp: int, to_timestamp: int):
+def pull_daily_ohlc_data(from_timestamp: int, to_timestamp: int):
 
     url = GlobalConfig.API_OHLC_DATA_URL
     headers = {
@@ -69,3 +74,39 @@ def pull_daily_data(from_timestamp: int, to_timestamp: int):
         
     except Exception as e:
         print(f"Error while pull ohlc data {e}-> page 1")
+
+def pull_companies_data():
+    hook = PostgresHook(postgres_conn_id="postgres")
+    conn = hook.get_conn()
+    cursor: Cursor = conn.cursor()
+    cursor.execute(
+        """
+        select 
+            company_name,
+            company_ticker,
+            company_asset_type,
+            company_composite_figi,
+            company_cik,
+            company_industry,
+            company_sic_code
+        from datasource.companies
+        """
+    )
+
+    with open("./data/companies.csv", 'w') as f:
+        csr_writer = csv.writer(f)
+        headers = [desc[0] for desc in cursor.description]
+        csr_writer.writerow(headers)
+        csr_writer.writerows(cursor.fetchall())
+    
+    cursor.close()
+    conn.close()
+    logging.info("Saved companies data in text file companies.txt")
+
+    df = pd.read_csv("./data/companies.csv",
+                        dtype={
+                            "company_cik": "string",
+                            "company_sic_code": "string"
+                        }
+                    )
+    df.to_parquet("./data/companies.parquet", index=False)

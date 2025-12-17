@@ -1,6 +1,6 @@
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
-from utils import (pull_daily_data, 
+from utils import (pull_daily_ohlc_data, 
                    date_to_timestamp,
                    make_date)
 from datetime import datetime, timedelta
@@ -25,7 +25,7 @@ def pull_data_daily_job(**context):
                                      month=start_date.month,
                                      day=start_date.day)
     
-    pull_daily_data(from_timestamp=from_timestamp,
+    pull_daily_ohlc_data(from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp)
 
 def upload_file_into_hdfs(**context):
@@ -43,7 +43,7 @@ with DAG(
     dag_id="pull_daily_ohlc_data_into_hdfs",
     default_args=default_args,
     start_date=datetime(2025, 5, 1),
-    end_date=datetime(2025, 5, 10),
+    end_date=datetime(2025, 5, 20),
     schedule="@daily"
 ) as dag:
     task1 = PythonOperator(

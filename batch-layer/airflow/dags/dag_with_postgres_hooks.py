@@ -22,7 +22,7 @@ def postgres_operator():
         """
     )
 
-    with open("./data/get_orders.txt", 'w') as f:
+    with open("./data/get_orders.csv", 'w') as f:
         csr_writer = csv.writer(f)
         csr_writer.writerow(cursor.description)
         csr_writer.writerows(cursor.fetchall())

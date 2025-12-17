@@ -1,4 +1,4 @@
-from utils import pull_daily_data, date_to_timestamp
+from utils import pull_daily_ohlc_data, date_to_timestamp
 from datetime import datetime, timedelta
 
 start_date = datetime(year=2025, month=5, day=1)
@@ -15,7 +15,7 @@ def pull_data_daily_job():
                                      day=start_date.day)
     print(from_timestamp)
     print(to_timestamp)
-    pull_daily_data(from_timestamp=from_timestamp,
+    pull_daily_ohlc_data(from_timestamp=from_timestamp,
                     to_timestamp=to_timestamp)
 
 pull_data_daily_job()

@@ -11,3 +11,4 @@ __pycache__/
 .airflow_venv
 .airflow_win
 .airflow
+local-data

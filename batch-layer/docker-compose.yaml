@@ -122,3 +122,4 @@ volumes:
     script-src:
 # hdfs dfs -put /workspace/hadoop/local-data/ohlc /airflow/data
 # hdfs dfs -put /workspace/hadoop/local-data/companies /airflow/data
+# hdfs dfs -put /workspace/hadoop/local-data/news /airflow/data

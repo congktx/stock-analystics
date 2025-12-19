@@ -26,12 +26,11 @@ CREATE TABLE dim_topics (
 CREATE TABLE dim_news (
     news_id                     BIGINT NOT NULL PRIMARY KEY,
     news_time_id                BIGINT NOT NULL ,
-    overall_score               FLOAT,
+    news_overall_score               FLOAT,
     news_title                  NVARCHAR(MAX),
     news_summary                NVARCHAR(MAX),
-    news_category_within_score  FLOAT,
+    news_category_within_source NVARCHAR(255),
     news_source                 NVARCHAR(255),
-    news_time_published         DATETIME2
 );
 
 CREATE TABLE fact_candles (
@@ -66,7 +65,7 @@ CREATE TABLE fact_news_topic (
     news_topic_news_id  BIGINT NOT NULL ,
     news_topic_topic_id BIGINT NOT NULL ,
 
-    news_topic_relevant_score FLOAT
+    news_topic_relevance_score FLOAT
 );
 
 CREATE TABLE stg_dim_time (
@@ -86,7 +85,7 @@ CREATE TABLE stg_dim_topics (
 CREATE TABLE stg_dim_news (
     news_id                     BIGINT NOT NULL PRIMARY KEY,
     news_time_id                BIGINT NOT NULL ,
-    overall_score               FLOAT,
+    news_overall_score               FLOAT,
     news_title                  NVARCHAR(MAX),
     news_summary                NVARCHAR(MAX),
     news_category_within_score  FLOAT,

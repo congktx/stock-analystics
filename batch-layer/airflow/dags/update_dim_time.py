@@ -24,7 +24,7 @@ with DAG(
     )
     task2 = SparkSubmitOperator(
         task_id="submit_update_dim_time_job",
-        application="/workspace/airflow/spark-jobs/insert_data_to_stg_dim_time.py",
+        application="/workspace/airflow/spark-jobs/insert_data_into_stg_dim_time.py",
         conn_id="spark",
         jars='/workspace/airflow/connector/mssql-jdbc-12.2.0.jre11.jar',
         deploy_mode='cluster',

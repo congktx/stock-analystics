@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any
 
@@ -186,6 +188,61 @@ class SentimentAggregator(AggregateFunction):
         }
 
 
+def _configure_jars(env):
+    """
+    Configure JAR files for PyFlink Kafka connector
+    """
+    def path_to_file_url(path):
+        """Convert Windows/Unix path to file:// URL"""
+        abs_path = Path(path).absolute()
+        # Convert to POSIX path for URL (forward slashes)
+        posix_path = abs_path.as_posix()
+        # Add file:// prefix
+        if not posix_path.startswith('file://'):
+            return f'file:///{posix_path}' if posix_path[1:3] != '://' else f'file://{posix_path}'
+        return posix_path
+    
+    # Check for JAR files in libs directory
+    project_root = Path(__file__).parent.parent.parent.parent
+    libs_dir = project_root / 'libs'
+    
+    if libs_dir.exists():
+        jar_files = list(libs_dir.glob('*.jar'))
+        if jar_files:
+            jar_urls = [path_to_file_url(jar) for jar in jar_files]
+            logger.info(f"✅ Found {len(jar_files)} JAR file(s)")
+            for jar in jar_files:
+                logger.info(f"   - {jar.name}")
+            env.add_jars(*jar_urls)
+            return True
+    
+    # Check environment variable
+    env_jars = os.environ.get('PYFLINK_JARS')
+    if env_jars:
+        jar_list = env_jars.split(';' if os.name == 'nt' else ':')
+        jar_urls = [path_to_file_url(jar) for jar in jar_list]
+        logger.info(f"✅ Using JAR files from PYFLINK_JARS: {env_jars}")
+        env.add_jars(*jar_urls)
+        return True
+    
+    logger.error("")
+    logger.error("❌ Kafka connector JAR files not found!")
+    logger.error("")
+    logger.error("PyFlink requires JAR files to connect to Kafka. Please:")
+    logger.error("")
+    logger.error("1. Download the JAR file:")
+    logger.error("   mkdir libs")
+    logger.error("   curl -o libs/flink-sql-connector-kafka-3.1.0-1.18.jar https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.1.0-1.18/flink-sql-connector-kafka-3.1.0-1.18.jar")
+    logger.error("")
+    logger.error("2. Or set environment variable:")
+    logger.error("   Windows: set PYFLINK_JARS=path\\to\\connector.jar")
+    logger.error("   Linux/Mac: export PYFLINK_JARS=/path/to/connector.jar")
+    logger.error("")
+    logger.error("See docs/PYFLINK_SETUP.md for details.")
+    logger.error("")
+    return False
+
+
 def create_news_flink_job():
     
     if not PYFLINK_AVAILABLE:
@@ -196,7 +253,13 @@ def create_news_flink_job():
     env.set_parallelism(FlinkConfig.DEFAULT_PARALLELISM)
     env.enable_checkpointing(FlinkConfig.CHECKPOINT_INTERVAL_MS)
     
+    # Configure JAR files
+    if not _configure_jars(env):
+        return None
+    
+    logger.info("="*60)
     logger.info("PyFlink News Sentiment Processing Job")
+    logger.info("="*60)
     logger.info(f"Kafka Bootstrap: {KafkaConfig.BOOTSTRAP_SERVERS}")
     logger.info(f"Input Topic: {KafkaConfig.TOPIC_NEWS_SENTIMENT}")
     logger.info(f"Parallelism: {FlinkConfig.DEFAULT_PARALLELISM}")
@@ -221,21 +284,24 @@ def create_news_flink_job():
         .map(NewsSentimentEnrichmentFunction()) \
         .name("Enrich News Sentiment")
     
+    # Print results to console
     enriched_stream.print()
     
-    # Configure Kafka sink
-    kafka_sink = KafkaSink.builder() \
-        .set_bootstrap_servers(KafkaConfig.BOOTSTRAP_SERVERS) \
-        .set_record_serializer(
-            KafkaRecordSerializationSchema.builder()
-                .set_topic("stock-news-processed")
-                .set_value_serialization_schema(SimpleStringSchema())
-                .build()
-        ) \
-        .build()
+    # TODO: Kafka sink requires additional JAR files
+    # For now, processed data is printed to console
+    # To write back to Kafka, add custom sink with kafka-python
     
-    # Sink to Kafka
-    enriched_stream.sink_to(kafka_sink).name("Kafka Sink - Processed News")
+    # kafka_sink = KafkaSink.builder() \
+    #     .set_bootstrap_servers(KafkaConfig.BOOTSTRAP_SERVERS) \
+    #     .set_record_serializer(
+    #         KafkaRecordSerializationSchema.builder()
+    #             .set_topic("stock-news-processed")
+    #             .set_value_serialization_schema(SimpleStringSchema())
+    #             .build()
+    #     ) \
+    #     .build()
+    # 
+    # enriched_stream.sink_to(kafka_sink).name("Kafka Sink - Processed News")
     
     return env
 

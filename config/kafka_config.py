@@ -1,21 +1,55 @@
 import os
+import platform
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
+def _add_kafka_to_hosts():
+    """Add kafka hostname to system hosts file if not exists (Windows/Linux)"""
+    import socket
+    try:
+        # Check if kafka already resolves to 127.0.0.1
+        ip = socket.gethostbyname('kafka')
+        if ip == '127.0.0.1':
+            return  # Already configured
+    except socket.gaierror:
+        pass  # kafka not in hosts, need to add
+    
+    # Auto-add to hosts file (requires admin/sudo in production)
+    # For development, manually add: 127.0.0.1 kafka
+    hosts_path = r'C:\Windows\System32\drivers\etc\hosts' if platform.system() == 'Windows' else '/etc/hosts'
+    try:
+        with open(hosts_path, 'a') as f:
+            f.write('\n127.0.0.1 kafka\n')
+    except PermissionError:
+        import warnings
+        warnings.warn(
+            f"\n⚠️  Cannot write to {hosts_path} (permission denied).\n"
+            f"Please add manually: 127.0.0.1 kafka\n"
+            f"Windows: Run PowerShell as Administrator and execute:\n"
+            f'  Add-Content -Path C:\\Windows\\System32\\drivers\\etc\\hosts -Value "`n127.0.0.1 kafka"\n'
+            f"Linux/Mac: sudo sh -c 'echo \"127.0.0.1 kafka\" >> /etc/hosts'"
+        )
+
+
+# Try to configure hosts on import
+_add_kafka_to_hosts()
+
+
 class KafkaConfig:
     # Kafka Broker Settings
-    # K8s NodePort: localhost:30092 (external access)
+    # K8s NodePort with port-forward: kafka:30092 (requires hosts entry: 127.0.0.1 kafka)
     # K8s Internal: kafka:9092 (from within pods)
     # Docker: localhost:9092
-    BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:30092")
+    BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:30092")
     CLIENT_ID = os.environ.get("KAFKA_CLIENT_ID", "stock-crawler")
     
     # Producer Settings
     PRODUCER_CONFIG = {
         'bootstrap_servers': BOOTSTRAP_SERVERS,
         'client_id': CLIENT_ID,
+        'api_version': (3, 7, 0),  # Kafka 3.7.0 on K8s
         'acks': 'all',  # Chờ ACK từ tất cả replica
         'retries': 3,
         'max_in_flight_requests_per_connection': 1,  # Đảm bảo thứ tự
@@ -28,6 +62,7 @@ class KafkaConfig:
     # Consumer Settings
     CONSUMER_CONFIG = {
         'bootstrap_servers': BOOTSTRAP_SERVERS,
+        'api_version': (3, 7, 0),  # Kafka 3.7.0 on K8s
         'group_id': 'stock-processor-group',
         'auto_offset_reset': 'earliest',  
         'enable_auto_commit': False,  

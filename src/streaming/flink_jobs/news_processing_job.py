@@ -1,17 +1,7 @@
-"""
-News Sentiment Processing Job for Apache Flink
-Processes news sentiment data from Kafka and performs:
-- Sentiment aggregation by ticker
-- Time-windowed sentiment trends
-- Anomaly detection for extreme sentiment changes
-"""
 import json
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
-
-# Note: This is a Python-based Flink job template
-# For production, consider using PyFlink or Java-based Flink for better performance
 
 logger = logging.getLogger(__name__)
 

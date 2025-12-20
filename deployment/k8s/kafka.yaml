@@ -44,9 +44,9 @@ metadata:
     app: kafka
 spec:
   ports:
-    - port: 9092
+    - port: 9094
       name: external
-      targetPort: 9092
+      targetPort: 9094
       nodePort: 30092
   selector:
     app: kafka
@@ -77,17 +77,19 @@ spec:
         ports:
         - containerPort: 9092
           name: client
+        - containerPort: 9094
+          name: external
         env:
         - name: KAFKA_NODE_ID
           value: "1"
         - name: KAFKA_PROCESS_ROLES
           value: "broker,controller"
         - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-          value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+          value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT"
         - name: KAFKA_LISTENERS
-          value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092"
+          value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9094"
         - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092"
+          value: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:30092"
         - name: KAFKA_CONTROLLER_LISTENER_NAMES
           value: "CONTROLLER"
         - name: KAFKA_INTER_BROKER_LISTENER_NAME

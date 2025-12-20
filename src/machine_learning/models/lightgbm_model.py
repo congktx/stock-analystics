@@ -8,6 +8,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import classification_report, confusion_matrix, log_loss, precision_score, recall_score
 import re
 import numpy as np
+import optuna
 
 class LightGBMModel:
     def __init__(
@@ -28,6 +29,7 @@ class LightGBMModel:
         )
 
         self.feature_cols = None
+        self.tuned_params = None
 
     def count_rows(self):
         total = 0
@@ -102,7 +104,7 @@ class LightGBMModel:
             params = {
                 "objective": "multiclass",
                 "num_class": len(self.label_encoder.classes_),
-                "metric": "multi_logloss",
+                "metric": ["multi_error"],
                 "learning_rate": 0.05,
                 "num_leaves": 31,
                 "max_depth": -1,
@@ -143,7 +145,7 @@ class LightGBMModel:
                     if c not in [self.label_col, "label_encoded"]
                 ]
 
-                # 👉 Load validation 1 lần sau khi biết feature_cols
+            if val_dataset is None:
                 val_dataset = self.load_validation_set()
 
             X = chunk[self.feature_cols]
@@ -310,3 +312,144 @@ class LightGBMModel:
                 versions.append((int(match.group(1)), f))
 
         return sorted(versions, key=lambda x: x[0])
+    
+    def load_tuning_data(self, max_rows=300_000):
+        X_train, y_train = [], []
+        X_val, y_val = [], []
+
+        train_ratio = 0.7
+        val_ratio = 0.15
+
+        self.fit_label_encoder()
+        self.compute_row_splits()
+
+        total_rows = self.count_rows()
+        usable_rows = min(max_rows, total_rows)
+
+        train_cap = int(usable_rows * train_ratio)
+        val_cap = int(usable_rows * val_ratio)
+
+        print(
+            f"[INFO] Tuning rows: {usable_rows} "
+            f"(train={train_cap}, val={val_cap})"
+        )
+
+        row_cursor = 0
+        train_rows = 0
+        val_rows = 0
+
+        for chunk in pd.read_csv(self.data_file, chunksize=self.chunk_size):
+            start = row_cursor
+            end = row_cursor + len(chunk)
+            row_cursor = end
+
+            chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
+            chunk["label_encoded"] = self.label_encoder.transform(
+                chunk[self.label_col].astype(str)
+            )
+
+            if self.feature_cols is None:
+                self.feature_cols = [
+                    c for c in chunk.columns
+                    if c not in [self.label_col, "label_encoded"]
+                ]
+
+            # -----------------------
+            # TRAIN PART: [0, train_end)
+            # -----------------------
+            train_start = max(start, 0)
+            train_end = min(end, self.train_end)
+
+            if train_start < train_end and train_rows < train_cap:
+                cut_start = train_start - start
+                cut_end = min(train_end - start, cut_start + (train_cap - train_rows))
+
+                X_train.append(chunk[self.feature_cols].iloc[cut_start:cut_end])
+                y_train.append(chunk["label_encoded"].iloc[cut_start:cut_end])
+                train_rows += (cut_end - cut_start)
+
+            # -----------------------
+            # VALIDATION PART: [train_end, val_end)
+            # -----------------------
+            val_start = max(start, self.train_end)
+            val_end = min(end, self.val_end)
+
+            if val_start < val_end and val_rows < val_cap:
+                cut_start = val_start - start
+                cut_end = min(val_end - start, cut_start + (val_cap - val_rows))
+
+                X_val.append(chunk[self.feature_cols].iloc[cut_start:cut_end])
+                y_val.append(chunk["label_encoded"].iloc[cut_start:cut_end])
+                val_rows += (cut_end - cut_start)
+
+            if train_rows >= train_cap and val_rows >= val_cap:
+                break
+
+        if train_rows == 0 or val_rows == 0:
+            raise RuntimeError(
+                f"Invalid tuning split: train={train_rows}, val={val_rows}"
+            )
+
+        return (
+            lgb.Dataset(pd.concat(X_train), pd.concat(y_train)),
+            lgb.Dataset(pd.concat(X_val), pd.concat(y_val)),
+        )
+    
+    def tune_hyperparameters(
+        self,
+        n_trials=50,
+        timeout=None,
+        num_boost_round=500,
+    ):
+        train_set, val_set = self.load_tuning_data()
+
+        def objective(trial):
+            params = {
+                "objective": "multiclass",
+                "num_class": len(self.label_encoder.classes_),
+                "metric": "multi_error",
+
+                # 🔽 trainable params
+                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
+                "num_leaves": trial.suggest_int("num_leaves", 16, 128),
+                "max_depth": trial.suggest_int("max_depth", 3, 12),
+                "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 20, 200),
+                "feature_fraction": trial.suggest_float("feature_fraction", 0.6, 1.0),
+                "bagging_fraction": trial.suggest_float("bagging_fraction", 0.6, 1.0),
+                "bagging_freq": 1,
+                "lambda_l1": trial.suggest_float("lambda_l1", 1e-4, 10.0, log=True),
+                "lambda_l2": trial.suggest_float("lambda_l2", 1e-4, 10.0, log=True),
+
+                # fixed
+                "class_weight": "balanced",
+                "verbose": -1,
+                "feature_pre_filter": False,
+            }
+
+            booster = lgb.train(
+                params,
+                train_set,
+                num_boost_round=num_boost_round,
+                valid_sets=[val_set],
+                callbacks=[lgb.early_stopping(50), lgb.log_evaluation(period=50)],
+            )
+
+            return booster.best_score["valid_0"]["multi_error"]
+
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=n_trials, timeout=timeout)
+
+        # 👉 Gán vào self để dùng cho train()
+        self.tuned_params = {
+            **study.best_params,
+            "objective": "multiclass",
+            "num_class": len(self.label_encoder.classes_),
+            "metric": ["multi_error"],
+            "class_weight": "balanced",
+            "verbose": -1,
+        }
+
+        print("[INFO] Optuna best score:", study.best_value)
+        print("[INFO] Optuna best params:", self.tuned_params)
+
+        return self.tuned_params

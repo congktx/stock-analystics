@@ -8,9 +8,9 @@ def main():
         model_path="lightgbm_model.pkl",
         chunk_size=200_000
     )
-
+    model.tune_hyperparameters(n_trials=50)
     print("\n=== TRAIN MODEL ===")
-    model.train()
+    model.train(params=model.tuned_params)
 
     print("\n=== EVALUATE MODEL ===")
     results = model.evaluate()

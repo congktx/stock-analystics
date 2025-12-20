@@ -1,4 +1,5 @@
 import requests
+import logging
 
 from config import AlphavantageConfig
 
@@ -8,9 +9,18 @@ from utils.utils import text_to_hash
 
 from utils.time_utils import timestamp_to_YYYYMMDDTHHMM
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.kafka_producer import get_producer
+from kafka_config import KafkaConfig
+
 import time
 
+logger = logging.getLogger(__name__)
 mongodb = MongoDB()
+kafka_producer = get_producer()
 
 def get_news_sentiment(tickers, from_timestamp, to_timestamp):
     url = 'https://www.alphavantage.co/query'
@@ -38,8 +48,18 @@ def get_news_sentiment(tickers, from_timestamp, to_timestamp):
     
     try:
         response = requests.get(url, params=params, headers=headers).json()
+        
+        # Kiểm tra lỗi từ API
+        if response.get('Information'):
+            # API trả về thông báo lỗi
+            if 'rate limit' in response.get('Information', '').lower():
+                print(f"⚠️ Rate limit: {response.get('Information')}")
+            elif 'invalid' in response.get('Information', '').lower():
+                # Ticker không hợp lệ, bỏ qua không in lỗi
+                pass
+            return []
+        
         if not response.get('feed'):
-            print(response)
             return []
         
         list_news = []
@@ -74,7 +94,25 @@ def load_all_news_sentiment_to_db(list_news, time_update):
             "time_update": time_update
         }
         
-        mongodb.upsert_space_news(document)
+        # Try to send to Kafka first
+        kafka_sent = False
+        if KafkaConfig.ENABLE_KAFKA:
+            try:
+                # Extract ticker from ticker_sentiment for partitioning
+                ticker = None
+                if news.get('ticker_sentiment') and len(news.get('ticker_sentiment')) > 0:
+                    ticker = news.get('ticker_sentiment')[0].get('ticker')
+                
+                kafka_sent = kafka_producer.send_news_sentiment({
+                    **document,
+                    'ticker': ticker
+                })
+            except Exception as e:
+                logger.error(f"Error sending to Kafka: {e}")
+        
+        # Fallback to MongoDB or use as primary storage
+        if not kafka_sent or KafkaConfig.FALLBACK_TO_MONGODB:
+            mongodb.upsert_space_news(document)
         
 def crawl_news_sentiment(from_timestamp, to_timestamp, time_update):
     timestamp = mongodb.find_last_timestamp(mongodb._company_infos)

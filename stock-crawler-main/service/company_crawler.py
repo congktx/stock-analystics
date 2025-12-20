@@ -1,4 +1,5 @@
 import requests
+import logging
 
 import time
 
@@ -10,7 +11,16 @@ from config import PolygonConfig
 
 from utils.parse_timestamp import parse_date_to_timestamp
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.kafka_producer import get_producer
+from kafka_config import KafkaConfig
+
+logger = logging.getLogger(__name__)
 mongodb = MongoDB()
+kafka_producer = get_producer()
 
 def get_company_infos(date: str = "2024-12-01", exchange = 'XNAS'):
     params = {
@@ -89,7 +99,17 @@ def load_all_company_infos_to_db(list_company_infos, time_update):
             "time_update": time_update
         }
         
-        mongodb.upsert_space_company(document)
+        # Try to send to Kafka first
+        if KafkaConfig.ENABLE_KAFKA:
+            try:
+                kafka_producer.send_company_info(document)
+            except Exception as e:
+                logger.error(f"Error sending company info to Kafka: {e}")
+        
+        # Fallback to MongoDB or use as primary storage
+        if not KafkaConfig.ENABLE_KAFKA or KafkaConfig.FALLBACK_TO_MONGODB:
+            mongodb.upsert_space_company(document)
+        
         time.sleep(0.1)
 
 def crawl_all_company(date: str = "2024-12-01", list_exchage = ['XNAS', 'XNYS']):

@@ -1,0 +1,23 @@
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stock-analytics-config
+  namespace: stock-analytics
+data:
+  # Kafka Configuration
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_CLIENT_ID: "stock-crawler"
+  ENABLE_KAFKA: "true"
+  FALLBACK_TO_MONGODB: "true"
+  
+  # Flink Configuration
+  FLINK_JOBMANAGER_URL: "flink-jobmanager:8081"
+  
+  # Topic Names
+  KAFKA_TOPIC_NEWS_SENTIMENT: "stock-news-sentiment"
+  KAFKA_TOPIC_OHLC_DATA: "stock-ohlc-data"
+  KAFKA_TOPIC_COMPANY_INFO: "stock-company-info"
+  KAFKA_TOPIC_MARKET_STATUS: "stock-market-status"
+  KAFKA_TOPIC_DLQ: "stock-data-dlq"

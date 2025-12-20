@@ -1,4 +1,5 @@
 import time
+import logging
 
 import requests
 
@@ -10,7 +11,16 @@ from config import AlphavantageConfig
 
 from utils.parse_timestamp import parse_date_to_timestamp
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.kafka_producer import get_producer
+from kafka_config import KafkaConfig
+
+logger = logging.getLogger(__name__)
 mongodb = MongoDB()
+kafka_producer = get_producer()
 
 
 def get_market_status(date: str = "2024-12-01"):
@@ -49,8 +59,18 @@ def load_all_market_status_to_db(list_market_status, time_update):
             "notes": market_status.get("notes"),
             "time_update": time_update
         }
-
-        mongodb.upsert_space_market(document)
+        
+        # Try to send to Kafka first
+        if KafkaConfig.ENABLE_KAFKA:
+            try:
+                kafka_producer.send_market_status(document)
+            except Exception as e:
+                logger.error(f"Error sending market status to Kafka: {e}")
+        
+        # Fallback to MongoDB or use as primary storage
+        if not KafkaConfig.ENABLE_KAFKA or KafkaConfig.FALLBACK_TO_MONGODB:
+            mongodb.upsert_space_market(document)
+        
         time.sleep(0.1)
 
 def crawl_market_status(date: str = "2024-12-01"):

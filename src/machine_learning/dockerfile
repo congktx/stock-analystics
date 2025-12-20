@@ -1,0 +1,32 @@
+FROM python:3.10-slim
+
+# ========== SYSTEM DEPENDENCIES ==========
+RUN apt-get update && apt-get install -y \
+    openjdk-17-jdk \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# JAVA ENV
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
+# ========== WORKDIR ==========
+WORKDIR /app/src
+
+# ========== PYTHON DEPENDENCIES ==========
+# copy requirements trước để cache tốt
+COPY machine_learning/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# ========== COPY SOURCE ==========
+COPY machine_learning ./machine_learning
+
+# ========== SPARK CONFIG ==========
+ENV PYSPARK_PYTHON=python
+ENV SPARK_LOCAL_DIRS=/tmp/spark-local
+ENV SPARK_LOG_DIR=/tmp/spark-log
+
+RUN mkdir -p /tmp/spark-local /tmp/spark-log
+
+# ========== ENTRYPOINT ==========
+CMD ["python", "-m", "machine_learning"]

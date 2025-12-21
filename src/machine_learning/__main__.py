@@ -9,8 +9,8 @@ os.environ["PYSPARK_DRIVER_PYTHON"] = "python"
 def main():
     # Steps to be implemented:
     # 1. Load data using data_handler.connector
-    preprocessor = Preprocessor()
-    preprocessor.run()
+    # preprocessor = Preprocessor()
+    # preprocessor.run()
     # 2. Preprocess data using data_handler.preprocessor & dump preprocessed data
     # 3. Train model using models
     # 4. Evaluate model performance

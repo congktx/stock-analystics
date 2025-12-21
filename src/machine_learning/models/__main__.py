@@ -8,12 +8,12 @@ def main():
         model_path="lightgbm_model.pkl",
         chunk_size=200_000
     )
-    model.tune_hyperparameters(n_trials=50)
-    print("\n=== TRAIN MODEL ===")
-    model.train(params=model.tuned_params)
+    # model.tune_hyperparameters(n_trials=50)
+    # print("\n=== TRAIN MODEL ===")
+    # model.train(params=model.tuned_params)
 
     print("\n=== EVALUATE MODEL ===")
-    results = model.evaluate()
+    results = model.evaluate(test_data_file="test_data.csv", val_end=0)
     viz = Visualizer(results)
     viz.plot_label_distribution()
     viz.plot_confusion_matrix()

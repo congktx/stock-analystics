@@ -27,6 +27,8 @@ class LightGBMModel:
         self.data_file = (
             Path(input_path) / "preprocessed_data" / "data.csv"
         )
+        
+        self.test_data_file = None
 
         self.feature_cols = None
         self.tuned_params = None
@@ -174,7 +176,14 @@ class LightGBMModel:
     # --------------------------------------------------
     # 3️⃣ Evaluate (sample-based, RAM an toàn)
     # --------------------------------------------------
-    def evaluate(self):
+    def evaluate(self, test_data_file = None, val_end = None):
+        if val_end is None:
+            val_end = self.val_end
+            
+        if test_data_file is None:
+            test_data_file = self.data_file
+        else:
+            test_data_file = os.getcwd() + "/machine_learning/data_handler/preprocessed_data/" + test_data_file
         self.load_model()
 
         y_true_all = []
@@ -183,17 +192,17 @@ class LightGBMModel:
 
         row_cursor = 0
 
-        for chunk in pd.read_csv(self.data_file, chunksize=self.chunk_size):
+        for chunk in pd.read_csv(test_data_file, chunksize=self.chunk_size):
             start = row_cursor
             end = row_cursor + len(chunk)
             row_cursor = end
 
             # Skip train + val
-            if end <= self.val_end:
+            if end <= val_end:
                 continue
 
-            if start < self.val_end:
-                chunk = chunk.iloc[self.val_end - start :]
+            if start < val_end:
+                chunk = chunk.iloc[val_end - start :]
 
             chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
 
@@ -236,7 +245,7 @@ class LightGBMModel:
             "y_pred": y_pred_all,
             "y_proba": y_proba_all,
             "labels": self.label_encoder.classes_,
-            "data_file": self.data_file,
+            "data_file": test_data_file,
             "chunk_size": self.chunk_size,
         }
 

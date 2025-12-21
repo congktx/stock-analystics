@@ -4,6 +4,9 @@ import pandas as pd
 from pathlib import Path
 from machine_learning.enums import FutureDays
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
 
 
 class Preprocessor:
@@ -15,6 +18,11 @@ class Preprocessor:
         self.future_days = FutureDays.WEEK.value
         self.tickers = pd.read_csv(self.sentiment_path, usecols=['ticker']).ticker.str.upper().unique()
         self.processed_tickers = pd.read_csv(input_path + "/preprocessed_data/processed_tickers.csv", usecols=['ticker'])
+        self.feature_cols = [
+            'ticker', 'date', 'news_count', 'avg_sentiment_score', 
+            'bullish_count','bearish_count','neutral_count',
+            'top_sentiment_score', 'close_price', 'future_avg_close', 'label'
+        ]
         
     def process_ticker(self, ticker):
         """Xử lý từng ticker để tránh load toàn bộ CSV"""
@@ -98,13 +106,7 @@ class Preprocessor:
         labels = ['strong_down', 'down', 'stable', 'up', 'strong_up']
         df['label'] = pd.cut(df['label'], bins=bins, labels=labels)
         
-        # 6️⃣ Chọn cột đầu vào
-        feature_cols = [
-            'ticker', 'date', 'news_count', 'avg_sentiment_score', 
-            'bullish_count','bearish_count','neutral_count',
-            'top_sentiment_score', 'close_price', 'future_avg_close', 'label'
-        ]
-        df = df[feature_cols]
+        df = df[self.feature_cols]
         if df.empty:
             print(f"[WARN] No data after processing for {ticker_upper}")
             self.mark_ticker_processed(ticker_upper)
@@ -137,3 +139,55 @@ class Preprocessor:
                 continue 
             self.process_ticker(ticker)
         print("[INFO] Preprocessing completed!")
+        
+    def plot_preprocessed_data(self):
+        """make statistics on the preprocessed data"""
+        #read file
+        data_file = self.output_dir / f"data.csv"
+        plotted_columns = ['news_count', 'avg_sentiment_score', 
+            'bullish_count','bearish_count','neutral_count',
+            'top_sentiment_score', 'close_price', 'future_avg_close']
+        df_iter = pd.read_csv(data_file, usecols=plotted_columns, chunksize=10**6)
+        #plot distribution of all features
+        for chunk in df_iter:
+            for col in plotted_columns:
+                plt.figure(figsize=(10, 6))
+                sns.histplot(chunk[col].dropna(), bins=50, kde=True)
+                plt.title(f'Distribution of {col}')
+                plt.xlabel(col)
+                plt.ylabel('Frequency')
+                plt.grid(True)
+                plt.show()
+                
+    def create_test_file(self, from_date, to_date=datetime.today().strftime("%y-%b-%d")):
+        """Create a test file from preprocessed data within a date range"""
+        data_file = self.output_dir / "data.csv"
+        test_file = self.output_dir / "test_data.csv"
+        if test_file.exists():
+            test_file.unlink()
+            print(f"[INFO] Removed existing file: {test_file}")
+        df_iter = pd.read_csv(
+            data_file,
+            parse_dates=['date'],
+            chunksize=10**6
+        )
+        
+        first_write = True
+        for chunk in df_iter:
+            mask = (chunk['date'] >= from_date) & (chunk['date'] <= to_date)
+            test_chunk = chunk.loc[mask]
+
+            if not test_chunk.empty:
+                test_chunk.to_csv(
+                    test_file,
+                    mode='a',
+                    index=False,
+                    header=first_write
+                )
+                first_write = False
+            print(f"[INFO] Test file created in chunk: {test_file}")
+                            
+        
+if __name__ == "__main__":
+    preprocessor = Preprocessor()
+    preprocessor.create_test_file(from_date="2025-01-01", to_date="2025-06-30")

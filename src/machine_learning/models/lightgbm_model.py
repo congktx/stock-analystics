@@ -9,6 +9,7 @@ from sklearn.metrics import classification_report, confusion_matrix, log_loss, p
 import re
 import numpy as np
 import optuna
+from collections import defaultdict
 
 class LightGBMModel:
     def __init__(
@@ -25,12 +26,12 @@ class LightGBMModel:
 
         input_path = os.getcwd() + "/machine_learning/data_handler"
         self.data_file = (
-            Path(input_path) / "preprocessed_data" / "data.csv"
+            Path(input_path) / "preprocessed_data" / "data_changed_label.csv"
         )
         
         self.test_data_file = None
 
-        self.feature_cols = None
+        self.feature_cols = ["ticker_id", "overall_sentiment_score", "relevance_score", "ticker_sentiment_score", "close_price"]
         self.tuned_params = None
 
     def count_rows(self):
@@ -38,16 +39,116 @@ class LightGBMModel:
         for chunk in pd.read_csv(self.data_file, chunksize=self.chunk_size):
             total += len(chunk)
         return total
+    
+    def stratified_split_to_files(
+        self,
+        train_ratio=0.7,
+        val_ratio=0.15,
+        output_dir="machine_learning/models/datasets",
+    ):
+        os.makedirs(output_dir, exist_ok=True)
 
-    def compute_row_splits(self):
-        total_rows = self.count_rows()
+        train_file = Path(output_dir) / "train.csv"
+        val_file = Path(output_dir) / "val.csv"
+        test_file = Path(output_dir) / "test.csv"
 
-        self.train_end = int(total_rows * 0.7)
-        self.val_end = int(total_rows * 0.85)
+        # remove old files
+        for f in [train_file, val_file, test_file]:
+            if f.exists():
+                f.unlink()
 
-        print("[INFO] Total rows:", total_rows)
-        print("[INFO] Train end row:", self.train_end)
-        print("[INFO] Val end row:", self.val_end)
+        self.fit_label_encoder()
+        label_counts = self.count_labels()
+
+        # quota per label
+        quotas = {}
+        for label_str, total in label_counts.items():
+            label = self.label_encoder.transform([label_str])[0]
+            quotas[label] = {
+                "train": int(total * train_ratio),
+                "val": int(total * val_ratio),
+                "test": total - int(total * train_ratio) - int(total * val_ratio),
+            }
+
+        used = {
+            "train": {l: 0 for l in quotas},
+            "val": {l: 0 for l in quotas},
+            "test": {l: 0 for l in quotas},
+        }
+
+        first_write = {"train": True, "val": True, "test": True}
+
+        for chunk in pd.read_csv(self.data_file, chunksize=self.chunk_size):
+            chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
+            chunk["label_encoded"] = self.label_encoder.transform(
+                chunk[self.label_col].astype(str)
+            )
+
+            for label in quotas:
+                df_l = chunk[chunk["label_encoded"] == label]
+
+                if df_l.empty:
+                    continue
+
+                df_l = df_l.sample(frac=1, random_state=42)  # shuffle within label
+
+                # -------- TRAIN --------
+                remain = quotas[label]["train"] - used["train"][label]
+                if remain > 0:
+                    take = min(len(df_l), remain)
+                    part = df_l.iloc[:take]
+                    part.to_csv(
+                        train_file,
+                        mode="a",
+                        index=False,
+                        header=first_write["train"],
+                    )
+                    first_write["train"] = False
+                    used["train"][label] += take
+                    df_l = df_l.iloc[take:]
+
+                # -------- VAL --------
+                remain = quotas[label]["val"] - used["val"][label]
+                if remain > 0 and not df_l.empty:
+                    take = min(len(df_l), remain)
+                    part = df_l.iloc[:take]
+                    part.to_csv(
+                        val_file,
+                        mode="a",
+                        index=False,
+                        header=first_write["val"],
+                    )
+                    first_write["val"] = False
+                    used["val"][label] += take
+                    df_l = df_l.iloc[take:]
+
+                # -------- TEST --------
+                remain = quotas[label]["test"] - used["test"][label]
+                if remain > 0 and not df_l.empty:
+                    take = min(len(df_l), remain)
+                    part = df_l.iloc[:take]
+                    part.to_csv(
+                        test_file,
+                        mode="a",
+                        index=False,
+                        header=first_write["test"],
+                    )
+                    first_write["test"] = False
+                    used["test"][label] += take
+
+            # stop early if done
+            if all(
+                used[s][l] >= quotas[l][s]
+                for s in ["train", "val", "test"]
+                for l in quotas
+            ):
+                break
+
+        print("[INFO] Stratified split done")
+        print("Train:", used["train"])
+        print("Val:", used["val"])
+        print("Test:", used["test"])
+
 
 
     # --------------------------------------------------
@@ -61,41 +162,27 @@ class LightGBMModel:
         self.label_encoder.fit(labels)
         print("[INFO] LabelEncoder fitted:", self.label_encoder.classes_)
 
-    def load_validation_set(self):
-        X_val_all = []
-        y_val_all = []
 
-        row_cursor = 0
-
+    def _init_stratified_quota(self, total_per_label, ratios):
+        """
+        ratios = dict(train=0.7, val=0.15, test=0.15)
+        """
+        quotas = {}
+        for label, total in total_per_label.items():
+            quotas[label] = {
+                "train": int(total * ratios["train"]),
+                "val": int(total * ratios["val"]),
+                "test": total - int(total * ratios["train"]) - int(total * ratios["val"]),
+            }
+        return quotas
+    
+    def count_labels(self):
+        counter = defaultdict(int)
         for chunk in pd.read_csv(self.data_file, chunksize=self.chunk_size):
-            start = row_cursor
-            end = row_cursor + len(chunk)
-            row_cursor = end
+            for l in chunk[self.label_col].astype(str):
+                counter[l] += 1
+        return counter
 
-            # Nếu chunk nằm hoàn toàn ngoài validation → skip
-            if end <= self.train_end or start >= self.val_end:
-                continue
-
-            # Cắt đúng phần giao với [train_end, val_end)
-            cut_start = max(0, self.train_end - start)
-            cut_end = min(len(chunk), self.val_end - start)
-            chunk = chunk.iloc[cut_start:cut_end]
-
-            chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
-
-            chunk["label_encoded"] = self.label_encoder.transform(
-                chunk[self.label_col].astype(str)
-            )
-
-            X_val_all.append(chunk[self.feature_cols])
-            y_val_all.append(chunk["label_encoded"])
-
-        X_val = pd.concat(X_val_all, ignore_index=True)
-        y_val = pd.concat(y_val_all, ignore_index=True)
-
-        print("[INFO] Validation rows:", len(X_val))
-
-        return lgb.Dataset(X_val, y_val, free_raw_data=True)
 
     # --------------------------------------------------
     # 2️⃣ Train theo chunk
@@ -106,67 +193,62 @@ class LightGBMModel:
             params = {
                 "objective": "multiclass",
                 "num_class": len(self.label_encoder.classes_),
-                "metric": ["multi_error"],
+                "metric": ["multi_logloss", "multi_error"],
                 "learning_rate": 0.05,
                 "num_leaves": 31,
                 "max_depth": -1,
                 "verbose": -1,
                 "class_weight": "balanced",
+                "categorical_feature": ["name:ticker_id"] #non continuous feature
             }
 
-        self.compute_row_splits()
+        train_file = "machine_learning/models/datasets/train.csv"
+        val_file = "machine_learning/models/datasets/val.csv"
 
         booster = None
-        row_cursor = 0
 
-        val_dataset = None
-
-        for i, chunk in enumerate(
-            pd.read_csv(self.data_file, chunksize=self.chunk_size)
-        ):
-            logger.info(chunk.info())
-            start = row_cursor
-            end = row_cursor + len(chunk)
-            row_cursor = end
-
-            if start >= self.train_end:
-                break
-
-            if end > self.train_end:
-                chunk = chunk.iloc[: self.train_end - start]
-
+        train_set = lgb.Dataset(
+            pd.read_csv(train_file, chunksize=self.chunk_size)
+            .get_chunk(self.chunk_size)[self.feature_cols],
+            label=None,
+        )
+        
+        for i, chunk in enumerate(pd.read_csv(train_file, chunksize=self.chunk_size)):
             chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
-
             chunk["label_encoded"] = self.label_encoder.transform(
                 chunk[self.label_col].astype(str)
             )
 
-            if self.feature_cols is None:
-                self.feature_cols = [
-                    c for c in chunk.columns
-                    if c not in [self.label_col, "label_encoded"]
-                ]
-
-            if val_dataset is None:
-                val_dataset = self.load_validation_set()
-
             X = chunk[self.feature_cols]
             y = chunk["label_encoded"]
 
+            train_set = lgb.Dataset(X, y, free_raw_data=False)
+
+            if i == 0:
+                val_df = pd.read_csv(val_file)
+                val_df = val_df.drop(columns=["ticker", "date"], errors="ignore")
+                val_df["label_encoded"] = self.label_encoder.transform(
+                    val_df[self.label_col].astype(str)
+                )
+                val_set = lgb.Dataset(
+                    val_df[self.feature_cols],
+                    val_df["label_encoded"],
+                    free_raw_data=False,
+                )
+
             booster = lgb.train(
                 params,
-                lgb.Dataset(X, y),
+                train_set,
                 num_boost_round=num_boost_round,
                 init_model=booster,
-                valid_sets=[val_dataset],
-                valid_names=["val"],
+                valid_sets=[val_set],
                 callbacks=[
-                    lgb.early_stopping(stopping_rounds=50),
+                    lgb.early_stopping(50),
                     lgb.log_evaluation(50),
                 ],
             )
 
-            print(f"[INFO] Trained chunk {i + 1}")
+        print(f"[INFO] Trained chunk {i + 1}")
 
         self.model = booster
         self.save_model()
@@ -176,36 +258,15 @@ class LightGBMModel:
     # --------------------------------------------------
     # 3️⃣ Evaluate (sample-based, RAM an toàn)
     # --------------------------------------------------
-    def evaluate(self, test_data_file = None, val_end = None):
-        if val_end is None:
-            val_end = self.val_end
-            
-        if test_data_file is None:
-            test_data_file = self.data_file
-        else:
-            test_data_file = os.getcwd() + "/machine_learning/data_handler/preprocessed_data/" + test_data_file
+    def evaluate(self, export_inference_result=False):
         self.load_model()
 
-        y_true_all = []
-        y_pred_all = []
-        y_proba_all = []
+        test_file = "machine_learning/models/datasets/test.csv"
 
-        row_cursor = 0
+        y_true_all, y_pred_all, y_proba_all = [], [], []
 
-        for chunk in pd.read_csv(test_data_file, chunksize=self.chunk_size):
-            start = row_cursor
-            end = row_cursor + len(chunk)
-            row_cursor = end
-
-            # Skip train + val
-            if end <= val_end:
-                continue
-
-            if start < val_end:
-                chunk = chunk.iloc[val_end - start :]
-
+        for chunk in pd.read_csv(test_file, chunksize=self.chunk_size):
             chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
-
             chunk["label_encoded"] = self.label_encoder.transform(
                 chunk[self.label_col].astype(str)
             )
@@ -220,18 +281,16 @@ class LightGBMModel:
             y_pred_all.extend(y_pred)
             y_proba_all.extend(proba)
 
-        # 👉 convert sang numpy
-        y_true_all = np.array(y_true_all)
-        y_pred_all = np.array(y_pred_all)
-        y_proba_all = np.array(y_proba_all)
-
         results = {
             "log_loss": log_loss(y_true_all, y_proba_all),
-            "precision_macro": precision_score(
-                y_true_all, y_pred_all, average="macro", zero_division=0
-            ),
-            "recall_macro": recall_score(
-                y_true_all, y_pred_all, average="macro", zero_division=0
+            "precision_macro": precision_score(y_true_all, y_pred_all, average="macro"),
+            "recall_macro": recall_score(y_true_all, y_pred_all, average="macro"),
+            "confusion_matrix": confusion_matrix(y_true_all, y_pred_all),
+            "classification_report": classification_report(
+                y_true_all,
+                y_pred_all,
+                target_names=self.label_encoder.classes_,
+                zero_division=0,
             ),
             "classification_report": classification_report(
                 y_true_all,
@@ -245,10 +304,29 @@ class LightGBMModel:
             "y_pred": y_pred_all,
             "y_proba": y_proba_all,
             "labels": self.label_encoder.classes_,
-            "data_file": test_data_file,
+            "data_file": test_file,
             "chunk_size": self.chunk_size,
         }
+        
+        if export_inference_result:
+            #delete existing file if exists then export to results/inference_results.csv by copying test_data.csv file and adding label_predicted columns
+            inference_file = os.getcwd() + "/machine_learning/models/results/inference_results.csv"
+            if os.path.exists(inference_file):
+                os.remove(inference_file)
 
+            df_iter = pd.read_csv(test_file, chunksize=self.chunk_size)
+            first_write = True
+            for chunk in df_iter:
+                if not chunk.empty:
+                    chunk["label_predicted"] = self.label_encoder.inverse_transform(y_pred_all)
+                    chunk.to_csv(
+                        inference_file,
+                        mode='a',
+                        index=False,
+                        header=first_write
+                    )
+                    first_write = False
+                print(f"[INFO] inference result file created in chunk: {inference_file}")
         return results
 
 
@@ -257,13 +335,7 @@ class LightGBMModel:
     # 4️⃣ Infer
     # --------------------------------------------------
     def infer(self, df: pd.DataFrame):
-        self.load_model()
-
-        df = df.drop(columns=["ticker", "date"], errors="ignore")
-        X = df[self.feature_cols]
-
-        preds = self.model.predict(X).argmax(axis=1)
-        return self.label_encoder.inverse_transform(preds)
+        pass
 
     # --------------------------------------------------
     # 5️⃣ Save / Load
@@ -322,101 +394,39 @@ class LightGBMModel:
 
         return sorted(versions, key=lambda x: x[0])
     
-    def load_tuning_data(self, max_rows=300_000):
-        X_train, y_train = [], []
-        X_val, y_val = [], []
-
-        train_ratio = 0.7
-        val_ratio = 0.15
-
-        self.fit_label_encoder()
-        self.compute_row_splits()
-
-        total_rows = self.count_rows()
-        usable_rows = min(max_rows, total_rows)
-
-        train_cap = int(usable_rows * train_ratio)
-        val_cap = int(usable_rows * val_ratio)
-
-        print(
-            f"[INFO] Tuning rows: {usable_rows} "
-            f"(train={train_cap}, val={val_cap})"
-        )
-
-        row_cursor = 0
-        train_rows = 0
-        val_rows = 0
-
-        for chunk in pd.read_csv(self.data_file, chunksize=self.chunk_size):
-            start = row_cursor
-            end = row_cursor + len(chunk)
-            row_cursor = end
-
-            chunk = chunk.drop(columns=["ticker", "date"], errors="ignore")
-            chunk["label_encoded"] = self.label_encoder.transform(
-                chunk[self.label_col].astype(str)
-            )
-
-            if self.feature_cols is None:
-                self.feature_cols = [
-                    c for c in chunk.columns
-                    if c not in [self.label_col, "label_encoded"]
-                ]
-
-            # -----------------------
-            # TRAIN PART: [0, train_end)
-            # -----------------------
-            train_start = max(start, 0)
-            train_end = min(end, self.train_end)
-
-            if train_start < train_end and train_rows < train_cap:
-                cut_start = train_start - start
-                cut_end = min(train_end - start, cut_start + (train_cap - train_rows))
-
-                X_train.append(chunk[self.feature_cols].iloc[cut_start:cut_end])
-                y_train.append(chunk["label_encoded"].iloc[cut_start:cut_end])
-                train_rows += (cut_end - cut_start)
-
-            # -----------------------
-            # VALIDATION PART: [train_end, val_end)
-            # -----------------------
-            val_start = max(start, self.train_end)
-            val_end = min(end, self.val_end)
-
-            if val_start < val_end and val_rows < val_cap:
-                cut_start = val_start - start
-                cut_end = min(val_end - start, cut_start + (val_cap - val_rows))
-
-                X_val.append(chunk[self.feature_cols].iloc[cut_start:cut_end])
-                y_val.append(chunk["label_encoded"].iloc[cut_start:cut_end])
-                val_rows += (cut_end - cut_start)
-
-            if train_rows >= train_cap and val_rows >= val_cap:
-                break
-
-        if train_rows == 0 or val_rows == 0:
-            raise RuntimeError(
-                f"Invalid tuning split: train={train_rows}, val={val_rows}"
-            )
-
-        return (
-            lgb.Dataset(pd.concat(X_train), pd.concat(y_train)),
-            lgb.Dataset(pd.concat(X_val), pd.concat(y_val)),
-        )
-    
     def tune_hyperparameters(
         self,
         n_trials=50,
         timeout=None,
         num_boost_round=500,
     ):
-        train_set, val_set = self.load_tuning_data()
+        self.fit_label_encoder()
+
+        train_df = pd.read_csv("machine_learning/models/datasets/train.csv")
+        val_df = pd.read_csv("machine_learning/models/datasets/val.csv")
+
+        for df in [train_df, val_df]:
+            df.drop(columns=["ticker", "date"], errors="ignore", inplace=True)
+            df["label_encoded"] = self.label_encoder.transform(
+                df[self.label_col].astype(str)
+            )
+
+        train_set = lgb.Dataset(
+            train_df[self.feature_cols],
+            train_df["label_encoded"],
+            free_raw_data=False,
+        )
+        val_set = lgb.Dataset(
+            val_df[self.feature_cols],
+            val_df["label_encoded"],
+            free_raw_data=False,
+        )
 
         def objective(trial):
             params = {
                 "objective": "multiclass",
                 "num_class": len(self.label_encoder.classes_),
-                "metric": "multi_error",
+                "metric": ["multi_logloss", "multi_error"],
 
                 # 🔽 trainable params
                 "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.1, log=True),
@@ -440,10 +450,10 @@ class LightGBMModel:
                 train_set,
                 num_boost_round=num_boost_round,
                 valid_sets=[val_set],
-                callbacks=[lgb.early_stopping(50), lgb.log_evaluation(period=50)],
+                callbacks=[lgb.early_stopping(50, first_metric_only=True), lgb.log_evaluation(period=50)],
             )
 
-            return booster.best_score["valid_0"]["multi_error"]
+            return booster.best_score["valid_0"]["multi_logloss"]
 
         study = optuna.create_study(direction="minimize")
         study.optimize(objective, n_trials=n_trials, timeout=timeout)
@@ -453,7 +463,7 @@ class LightGBMModel:
             **study.best_params,
             "objective": "multiclass",
             "num_class": len(self.label_encoder.classes_),
-            "metric": ["multi_error"],
+            "metric": ["multi_logloss", "multi_error"],
             "class_weight": "balanced",
             "verbose": -1,
         }

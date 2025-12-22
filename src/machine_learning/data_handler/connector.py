@@ -16,7 +16,7 @@ import pandas as pd
 conn = pyodbc.connect(
     "DRIVER={ODBC Driver 18 for SQL Server};"
     "SERVER=localhost,1433;"
-    "DATABASE=full_data;"
+    "DATABASE=warehouse;"
     "UID=sa;"
     "PWD=Long2004@;"
     "TrustServerCertificate=yes;"

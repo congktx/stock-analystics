@@ -35,15 +35,14 @@ def upload_file_into_hdfs(**context):
                                       month=start_date.month,
                                       day=start_date.day)}"
     conn: InsecureClient = hook.get_conn()
-    conn.makedirs(f"/airflow/data/{folder}")
+    conn.makedirs(f"/airflow/data/ohlc/{folder}")
     hook.load_file(source='/workspace/airflow/data/output.parquet',
-                   destination=f'/airflow/data/{folder}/data.parquet')
+                   destination=f'/airflow/data/ohlc/{folder}/data.parquet')
     
 with DAG(
     dag_id="pull_daily_ohlc_data_into_hdfs",
     default_args=default_args,
-    start_date=datetime(2025, 5, 1),
-    end_date=datetime(2025, 5, 20),
+    start_date=datetime(2025, 8, 1),
     schedule="@daily"
 ) as dag:
     task1 = PythonOperator(

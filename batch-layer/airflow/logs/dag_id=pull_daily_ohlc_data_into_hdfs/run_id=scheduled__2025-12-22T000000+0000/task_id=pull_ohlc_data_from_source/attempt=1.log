@@ -1,0 +1,31 @@
+{"timestamp":"2025-12-22T03:15:21.942271Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T03:15:21.946017Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T03:15:34.954945Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T03:15:34.955400Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}
+{"timestamp":"2025-12-22T03:19:04.831441Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T03:19:04.834970Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T03:20:48.441991Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T03:20:48.442434Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}
+{"timestamp":"2025-12-22T03:22:25.990874Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T03:22:25.994026Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T03:23:13.382902Z","level":"error","event":"Process terminated by signal. For more information, see https://airflow.apache.org/docs/apache-airflow/stable/troubleshooting.html#process-terminated-by-signal.","signal":-2,"signal_name":"SIGINT","logger":"task"}
+{"timestamp":"2025-12-22T03:35:34.550032Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T03:35:34.551909Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T03:35:41.351586Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T03:35:41.351643Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}
+{"timestamp":"2025-12-22T03:36:22.647722Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T03:36:22.653336Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T03:36:27.610659Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T03:36:27.610808Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}
+{"timestamp":"2025-12-22T03:37:52.866557Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T03:37:52.868880Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T03:38:01.165208Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T03:38:01.165375Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}
+{"timestamp":"2025-12-22T06:23:10.770317Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T06:23:10.776287Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T06:23:15.479348Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T06:23:15.479476Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}
+{"timestamp":"2025-12-22T06:26:04.369624Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-22T06:26:04.376383Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-22T06:26:18.571488Z","level":"info","event":"Error while pull ohlc data 'ticker'-> page 1","logger":"task.stdout"}
+{"timestamp":"2025-12-22T06:26:18.571613Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}

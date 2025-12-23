@@ -100,7 +100,7 @@ class MongoDB:
         return {
             "page_id": n_page,
             "page_count": page_count,
-            "documents": list(self._OHLC.find(query).skip((n_page - 1) * n_limit).limit(n_limit).sort({"_id": 1}))
+            "documents": list(self._OHLC.find(query).skip((n_page - 1) * n_limit).limit(n_limit).sort({"t":  1}))
         }
 
     def get_news_sentiment(self, ticker: str | None, from_date: str | None, to_date: str | None, n_limit: int, n_page: int):

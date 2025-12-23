@@ -1,3 +1,5 @@
+import time
+
 import requests
 import logging
 
@@ -16,9 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.kafka_producer import get_producer
 from kafka_config import KafkaConfig
 
-import time
+from utils.json_file import load_json_file, save_json_file
 
-logger = logging.getLogger(__name__)
 mongodb = MongoDB()
 kafka_producer = get_producer()
 
@@ -60,6 +61,8 @@ def get_news_sentiment(tickers, from_timestamp, to_timestamp):
             return []
         
         if not response.get('feed'):
+            if response.get('Information') and "rate limit" in response.get('Information'):
+                return "rate limit"
             return []
         
         list_news = []
@@ -75,6 +78,7 @@ def get_news_sentiment(tickers, from_timestamp, to_timestamp):
         return []
 
 def load_all_news_sentiment_to_db(list_news, time_update):
+    list_document = []
     for news in list_news:
         document = {
             "_id": text_to_hash(news.get('title') + '_' + news.get('url')) + '_' + str(time_update),
@@ -115,16 +119,65 @@ def load_all_news_sentiment_to_db(list_news, time_update):
             mongodb.upsert_space_news(document)
         
 def crawl_news_sentiment(from_timestamp, to_timestamp, time_update):
-    timestamp = mongodb.find_last_timestamp(mongodb._company_infos)
-    filter = {
-        "time_update": timestamp
-    }
-    list_company_infos = list(mongodb.find_documets(mongodb._company_infos, filter))
-    tickers = list(map(lambda x: x.get('ticker'), list_company_infos))
-
+    # timestamp = mongodb.find_last_timestamp(mongodb._company_infos)
+    # filter = {
+    #     "time_update": timestamp
+    # }
+    # list_company_infos = list(mongodb.find_documets(mongodb._company_infos, filter))
+    # tickers = list(map(lambda x: x.get('ticker'), list_company_infos))
+    dict = load_json_file('./tmp/division_of_labor.json')
+    tickers = dict.get('Thinh')
+    last_request = 'AACBR'
+    is_start_crawl = False
     for ticker in tickers:
+        if ticker == last_request:
+            is_start_crawl = True
+        if not is_start_crawl:
+            continue
+        
         list_news = get_news_sentiment(ticker, from_timestamp, to_timestamp)
         print(ticker, len(list_news))
-        load_all_news_sentiment_to_db(list_news, time_update)    
+        if list_news == "rate limit": 
+            print(f"rate limit at {ticker}")
+            break
+        load_all_news_sentiment_to_db(list_news, time_update)
+        time.sleep(5)
         
-        time.sleep(12)
+def crawl_assigned_news_sentiment(from_timestamp, to_timestamp, time_update):
+    # load division_of_labor.json from project root
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    dov_path = os.path.join(root, "division_of_labor.json")
+    
+    try:
+        with open(dov_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            tickers = data.get(AssignedCompaniesConfig.ASSIGNED_COMPANIES, [])
+            last_index = data.get("ticker_index_finished", {}).get("Long", {}).get("sentiments", -1)
+            print("tickers counted:", len(tickers))
+    except Exception as e:
+        print(f"Error loading division_of_labor.json: {e}")
+        return
+        last_index = -1
+        tickers = []
+    
+    for index in range(last_index + 1, len(tickers)):
+        ticker = tickers[index]
+        list_news = get_news_sentiment(ticker, from_timestamp, to_timestamp)
+        print(ticker, len(list_news))
+        if list_news == "rate limit": 
+            print(f"rate limit at {ticker}")
+            # break
+            return "rate limit"
+        load_all_news_sentiment_to_db(list_news, time_update)
+        
+        try:
+            with open(dov_path, "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                data["ticker_index_finished"]["Long"]["sentiments"] = index  # Save last index
+                f.seek(0)
+                json.dump(data, f, indent=4)
+                f.truncate()
+        except Exception as e:
+            print(f"Error updating progress in division_of_labor.json: {e}")
+            
+        time.sleep(1)

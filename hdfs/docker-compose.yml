@@ -1,0 +1,25 @@
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: always
+    ports:
+      - 9870:9870 # Cổng Web UI (Hadoop 3.x)
+      - 9000:9000 # Cổng giao tiếp nội bộ
+    volumes:
+      - ./data/namenode:/hadoop/dfs/name # Mount volume để không mất dữ liệu khi tắt
+    environment:
+      - CLUSTER_NAME=test
+    env_file:
+      - ./hadoop.env
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    restart: always
+    volumes:
+      - ./data/datanode:/hadoop/dfs/data # Mount volume dữ liệu
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env

@@ -3,6 +3,9 @@ from utils.config import GlobalConfig
 
 def init_db():
     conn = GlobalConfig.CONN
+    if conn is None:
+        print("Database connection is not available.")
+        return
     cursor = conn.cursor()
 
     cursor.execute(query="CREATE SCHEMA datasource;")

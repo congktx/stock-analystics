@@ -1,3 +1,35 @@
+# Python virtual environment
+venv/
+
+#Logs
+logs/
+*.log
+
+# Environment variables
+.env
+
+# IDE specific files
+.vscode/
+.idea/
+
+# MacOS specific files
+.DS_Store
+
+# Temporary files
+tmp/
+temp/
+
+__pycache__
+
+test.*
+
+secret.json
+
+scripts/
+
+*.csv
+
+data/
 .venv/
 data/
 .data

@@ -29,7 +29,7 @@ def get_company_infos(date: str = "2024-12-01", exchange = 'XNAS'):
         "exchange": exchange,
         "active": "true",
         "order": "asc",
-        "limit": "100",
+        "limit": "1000",
         "sort": "ticker",
         "date": date,
     }
@@ -82,6 +82,7 @@ def polygon_get_next_url(cursor: str):
         return [], None
 
 def load_all_company_infos_to_db(list_company_infos, time_update):
+    list_document = []
     for company_infos in list_company_infos:
         document = {
             "_id": company_infos.get('ticker') + '_' + str(time_update),
@@ -114,17 +115,19 @@ def load_all_company_infos_to_db(list_company_infos, time_update):
 
 def crawl_all_company(date: str = "2024-12-01", list_exchage = ['XNAS', 'XNYS']):
     time_update = parse_date_to_timestamp(date)
-    
+    num_docs = 0    
     for exchange in list_exchage:
         list_company_infos, cursor = get_company_infos(date, exchange)
+        num_docs += len(list_company_infos)
         load_all_company_infos_to_db(list_company_infos, time_update)
         time.sleep(12)
         
         while cursor: 
             list_company_infos, cursor = polygon_get_next_url(cursor)
+            num_docs += len(list_company_infos)
             load_all_company_infos_to_db(list_company_infos, time_update)
             time.sleep(12)
-    
+
     mongodb.upsert_last_completed_timestamp(mongodb._company_infos, time_update)
     
     

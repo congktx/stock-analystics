@@ -15,6 +15,7 @@ _init_env()
 # delete_schema()
 # init_db()
 
-pull_company_infos(year=2025, month=11)
-test(sql="SELECT count(*) FROM datasource.companies")
-GlobalConfig.CONN.close()
+pull_company_infos(year=2025, month=10)
+test(sql="SELECT count(*) FROM datasource.company_status")
+if GlobalConfig.CONN:
+    GlobalConfig.CONN.close()

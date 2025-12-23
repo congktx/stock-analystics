@@ -1,23 +1,39 @@
-# FILE: 4_manual_tuning_full_metrics.py
+# FILE: 4_deep_learning_pytorch.py
 import pandas as pd
 import numpy as np
-import cupy as cp
-from cuml.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split, ParameterSampler
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import joblib
 import gc
+import os
+import time
 
 # --- CẤU HÌNH ---
 INPUT_FILE = "/kaggle/input/bigdata-ohlcv/training_data_returns.csv"
-BEST_MODEL_FILE = "best_cuml_rf_model.pkl"
+BEST_MODEL_FILE = "best_pytorch_model.pth"
+SCALER_FILE = "scaler.pkl" # Cần lưu bộ chuẩn hóa để dùng lại khi inference
 
+# Hyperparameters (Siêu tham số)
+BATCH_SIZE = 1024       # Số lượng mẫu học 1 lần (Tăng nếu GPU mạnh, giảm nếu hết VRAM)
+LEARNING_RATE = 0.001   # Tốc độ học
+EPOCHS = 100            # Số lần học lặp lại toàn bộ dữ liệu
+PATIENCE = 10           # Nếu 10 epochs không khá hơn thì dừng (Early Stopping)
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+print(f"--- Đang sử dụng thiết bị: {DEVICE} ---")
+
+# =========================================================
+# 1. TẢI VÀ XỬ LÝ DỮ LIỆU
+# =========================================================
 print(f"--- Đang tải dữ liệu từ {INPUT_FILE} ---")
 try:
-    # Load float32 để tiết kiệm RAM
     df = pd.read_csv(INPUT_FILE, dtype=np.float32)
-    # Lọc lại dữ liệu (như đã bàn ở các bước trước)
-    # df = df[(df.iloc[:, -1] > -0.5) & (df.iloc[:, -1] < 0.5)] 
+    # df = df[(df.iloc[:, -1] > -0.5) & (df.iloc[:, -1] < 0.5)] # Lọc nhiễu nếu cần
     
     X = df.iloc[:, :-1].values
     y = df.iloc[:, -1].values
@@ -29,136 +45,138 @@ except FileNotFoundError:
     exit()
 
 # ---------------------------------------------------------
-# 1. CHIA 3 TẬP: TRAIN (60%) - VALID (20%) - TEST (20%)
+# 2. CHIA TẬP TRAIN - VALID - TEST
 # ---------------------------------------------------------
 print("--- Đang chia dữ liệu ---")
-
-X_temp, X_test, y_temp, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42, shuffle=True
-)
-
-X_train, X_val, y_train, y_val = train_test_split(
-    X_temp, y_temp, test_size=0.25, random_state=42, shuffle=True
-)
-
-del X, y, X_temp, y_temp
-gc.collect()
-
-print(f"-> Train: {X_train.shape}")
-print(f"-> Valid: {X_val.shape}")
-print(f"-> Test : {X_test.shape}")
+X_temp, X_test, y_temp, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=0.25, random_state=42)
 
 # ---------------------------------------------------------
-# 2. CẤU HÌNH KHÔNG GIAN THAM SỐ
+# 3. CHUẨN HÓA DỮ LIỆU (BẮT BUỘC VỚI DEEP LEARNING)
 # ---------------------------------------------------------
-param_grid = {
-    'n_estimators': [100, 300],
-    'max_depth': [16, 20, 24],
-    'min_impurity_decrease': [0.0, 0.00001],
-    'min_samples_leaf': [1, 3, 5]
-}
+print("--- Đang chuẩn hóa dữ liệu (StandardScaler) ---")
+scaler = StandardScaler()
+# Chỉ fit trên tập Train để tránh lộ thông tin (Data Leakage)
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
 
-param_list = list(ParameterSampler(param_grid, n_iter=10, random_state=42))
+# Lưu scaler để dùng cho inference sau này
+joblib.dump(scaler, SCALER_FILE)
 
-print(f"\n--- Bắt đầu vòng lặp tìm kiếm (Thử {len(param_list)} cấu hình) ---")
+# Chuyển sang PyTorch Tensor
+X_train_t = torch.tensor(X_train, dtype=torch.float32).to(DEVICE)
+y_train_t = torch.tensor(y_train, dtype=torch.float32).view(-1, 1).to(DEVICE)
 
-best_score = -float('inf')
-best_params = None
+X_val_t = torch.tensor(X_val, dtype=torch.float32).to(DEVICE)
+y_val_t = torch.tensor(y_val, dtype=torch.float32).view(-1, 1).to(DEVICE)
 
-# ---------------------------------------------------------
-# 3. VÒNG LẶP: SO SÁNH LOSS TRAIN VS LOSS VALID
-# ---------------------------------------------------------
-for i, params in enumerate(param_list):
-    print(f"\n[{i+1}/{len(param_list)}] Params: {params}")
-    
-    model = RandomForestRegressor(
-        **params,
-        random_state=42,
-        n_streams=1,
-        verbose=False
-    )
-    
-    # Train
-    model.fit(X_train, y_train)
-    
-    # --- [MỚI] TÍNH LOSS TRÊN TẬP TRAIN ---
-    y_train_pred = model.predict(X_train)
-    if isinstance(y_train_pred, cp.ndarray): y_train_pred = y_train_pred.get()
-    
-    train_mse = mean_squared_error(y_train, y_train_pred)
-    train_r2 = r2_score(y_train, y_train_pred)
-    
-    # --- TÍNH LOSS TRÊN TẬP VALID ---
-    y_val_pred = model.predict(X_val)
-    if isinstance(y_val_pred, cp.ndarray): y_val_pred = y_val_pred.get()
-    
-    val_mse = mean_squared_error(y_val, y_val_pred)
-    val_r2 = r2_score(y_val, y_val_pred)
-    
-    # In ra để so sánh
-    print(f"   -> Train MSE: {train_mse:.6f} | R2: {train_r2:.4f}")
-    print(f"   -> Valid MSE: {val_mse:.6f} | R2: {val_r2:.4f}")
-    
-    # Kiểm tra chênh lệch (Overfitting check)
-    diff_mse = abs(train_mse - val_mse)
-    print(f"   -> Chênh lệch MSE: {diff_mse:.6f}")
+X_test_t = torch.tensor(X_test, dtype=torch.float32).to(DEVICE)
+y_test_t = torch.tensor(y_test, dtype=torch.float32).view(-1, 1).to(DEVICE)
 
-    if val_r2 > best_score:
-        best_score = val_r2
-        best_params = params
-        print("   => (Mô hình này đang tốt nhất!)")
+# Tạo DataLoader để batching
+train_dataset = TensorDataset(X_train_t, y_train_t)
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
+# =========================================================
+# 4. ĐỊNH NGHĨA MÔ HÌNH (NEURAL NETWORK)
+# =========================================================
+
+class StockPredictor(nn.Module):
+    def __init__(self, input_dim):
+        super(StockPredictor, self).__init__()
+        
+        # Mạng nơ-ron dạng tháp (giảm dần số nơ-ron)
+        self.net = nn.Sequential(
+            # Layer 1: Input -> 256
+            nn.Linear(input_dim, 256),
+            nn.BatchNorm1d(256), # Giúp hội tụ nhanh, ổn định
+            nn.ReLU(),
+            nn.Dropout(0.3),     # Tắt ngẫu nhiên 30% nơ-ron để chống học vẹt
+
+            # Layer 2: 256 -> 128
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+
+            # Layer 3: 128 -> 64
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            
+            # Layer 4: Output (1 giá trị dự đoán)
+            nn.Linear(64, 1) 
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+model = StockPredictor(input_dim=X_train.shape[1]).to(DEVICE)
+
+# Hàm mất mát (Loss) và Tối ưu (Optimizer)
+criterion = nn.MSELoss() # Dùng MSE cho bài toán hồi quy
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+# =========================================================
+# 5. QUÁ TRÌNH HUẤN LUYỆN (TRAINING LOOP)
+# =========================================================
+print(f"\n--- Bắt đầu Train ({EPOCHS} Epochs) ---")
+
+best_val_loss = float('inf')
+patience_counter = 0
+
+for epoch in range(EPOCHS):
+    model.train() # Chế độ train (bật Dropout)
+    train_loss = 0.0
+    
+    for inputs, targets in train_loader:
+        optimizer.zero_grad()           # Xóa gradient cũ
+        outputs = model(inputs)         # Dự đoán (Forward)
+        loss = criterion(outputs, targets) # Tính lỗi
+        loss.backward()                 # Lan truyền ngược (Backward)
+        optimizer.step()                # Cập nhật trọng số
+        train_loss += loss.item() * inputs.size(0)
+    
+    train_loss /= len(train_loader.dataset)
+    
+    # Đánh giá trên tập Valid
+    model.eval() # Chế độ eval (tắt Dropout)
+    with torch.no_grad():
+        val_outputs = model(X_val_t)
+        val_loss = criterion(val_outputs, y_val_t).item()
+        
+    print(f"Epoch {epoch+1}/{EPOCHS} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
+    
+    # --- EARLY STOPPING CHECK ---
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        patience_counter = 0
+        # Lưu model tốt nhất
+        torch.save(model.state_dict(), BEST_MODEL_FILE)
+        # print("  -> Model improved. Saved!")
+    else:
+        patience_counter += 1
+        if patience_counter >= PATIENCE:
+            print(f"\nDừng sớm (Early Stopping) tại epoch {epoch+1} vì Val Loss không giảm nữa.")
+            break
+
+# =========================================================
+# 6. ĐÁNH GIÁ CUỐI CÙNG TRÊN TẬP TEST
+# =========================================================
 print("\n" + "="*50)
-print(f"THAM SỐ TỐT NHẤT: {best_params}")
-print(f"Best Valid R2: {best_score:.4f}")
+print("KẾT QUẢ CUỐI CÙNG TRÊN TẬP TEST")
 print("="*50)
 
-# ---------------------------------------------------------
-# 4. RETRAIN & ĐÁNH GIÁ TRÊN TẬP TRAIN (GỘP)
-# ---------------------------------------------------------
-print("\n--- Gộp Train + Valid để huấn luyện mô hình cuối cùng ---")
+# Load lại trọng số tốt nhất đã lưu
+model.load_state_dict(torch.load(BEST_MODEL_FILE))
+model.eval()
 
-X_final_train = np.concatenate((X_train, X_val), axis=0)
-y_final_train = np.concatenate((y_train, y_val), axis=0)
+with torch.no_grad():
+    y_test_pred_t = model(X_test_t)
+    y_test_pred = y_test_pred_t.cpu().numpy().flatten() # Chuyển về CPU numpy
 
-# Xóa bớt biến cũ
-del X_train, y_train, X_val, y_val, model
-gc.collect()
-
-final_model = RandomForestRegressor(
-    **best_params,
-    random_state=42,
-    n_streams=1,
-    verbose=True
-)
-
-final_model.fit(X_final_train, y_final_train)
-
-# --- [MỚI] ĐÁNH GIÁ TRÊN TẬP TRAIN CUỐI CÙNG ---
-print("\n" + "-"*30)
-print("ĐÁNH GIÁ TRÊN TẬP TRAIN (Đã gộp)")
-print("-"*30)
-y_final_train_pred = final_model.predict(X_final_train)
-if isinstance(y_final_train_pred, cp.ndarray): y_final_train_pred = y_final_train_pred.get()
-
-ft_mse = mean_squared_error(y_final_train, y_final_train_pred)
-ft_mae = mean_absolute_error(y_final_train, y_final_train_pred)
-ft_r2 = r2_score(y_final_train, y_final_train_pred)
-
-print(f"Train MSE : {ft_mse:.6f}")
-print(f"Train MAE : {ft_mae:.4f}")
-print(f"Train R2  : {ft_r2:.4f}")
-
-# ---------------------------------------------------------
-# 5. ĐÁNH GIÁ TRÊN TẬP TEST
-# ---------------------------------------------------------
-print("\n" + "="*30)
-print("KẾT QUẢ CUỐI CÙNG TRÊN TẬP TEST")
-print("="*30)
-
-y_test_pred = final_model.predict(X_test)
-if isinstance(y_test_pred, cp.ndarray): y_test_pred = y_test_pred.get()
-
+# Tính toán Metrics
 test_mse = mean_squared_error(y_test, y_test_pred)
 test_mae = mean_absolute_error(y_test, y_test_pred)
 test_r2 = r2_score(y_test, y_test_pred)
@@ -167,30 +185,20 @@ print(f"Test MSE : {test_mse:.6f}")
 print(f"Test MAE : {test_mae:.4f}")
 print(f"Test R2  : {test_r2:.4f}")
 
-# --- PHẦN HIỂN THỊ MẪU ---
+# --- Hiển thị Mẫu ---
 results = pd.DataFrame({'Actual': y_test, 'Predicted': y_test_pred})
 results['Abs_Error'] = (results['Actual'] - results['Predicted']).abs()
-
 view_df = pd.DataFrame()
 view_df['Thực tế (%)'] = results['Actual'] * 100
 view_df['Dự đoán (%)'] = results['Predicted'] * 100
 view_df['Sai lệch (%)'] = view_df['Thực tế (%)'] - view_df['Dự đoán (%)']
 view_df['Sai số tuyệt đối'] = results['Abs_Error']
 
-print("\n--- [1] 5 Mẫu Ngẫu Nhiên ---")
+print("\n--- 5 Mẫu Ngẫu Nhiên ---")
 print(view_df.drop(columns=['Sai số tuyệt đối']).sample(5))
 
-print("\n--- [2] 5 Mẫu Dự Đoán TỐT NHẤT (Sai lệch ~ 0) ---")
+print("\n--- 5 Mẫu Dự Đoán Tốt Nhất ---")
 print(view_df.sort_values(by='Sai số tuyệt đối', ascending=True).head(5).drop(columns=['Sai số tuyệt đối']))
 
-print("\n--- [3] 5 Mẫu Dự Đoán TỆ NHẤT (Sai lệch lớn) ---")
-print(view_df.sort_values(by='Sai số tuyệt đối', ascending=False).head(5).drop(columns=['Sai số tuyệt đối']))
-
-# In thêm các mẫu dự đoán giảm
-neg_pred = view_df[view_df['Dự đoán (%)'] < 0]
-print(f"\n--- [4] 5/{len(neg_pred)} Mẫu Model Dự đoán GIẢM GIÁ (< 0) ---")
-if len(neg_pred) > 0:
-    print(neg_pred.drop(columns=['Sai số tuyệt đối']).sample(min(5, len(neg_pred))))
-
-print(f"\n--- Lưu model vào {BEST_MODEL_FILE} ---")
-joblib.dump(final_model, BEST_MODEL_FILE)
+print(f"\n--- Đã lưu Model tốt nhất vào: {BEST_MODEL_FILE} ---")
+print(f"--- Đã lưu Scaler vào: {SCALER_FILE} (Cần dùng cho inference) ---")

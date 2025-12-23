@@ -27,9 +27,9 @@ class MongoDB:
             logger.warning("Failed connecting to MongoDB Main")
             sys.exit()
 
-        self._company_infos = self.get_collection('company-infos')
-        self._market_status = self.get_collection('market-status')
-        self._news_sentiment = self.get_collection('news-sentiment')
+        self._company_infos = self.get_collection('company_infos')
+        self._market_status = self.get_collection('market_status')
+        self._news_sentiment = self.get_collection('news_sentiment')
         self._OHLC = self.get_collection('OHLC')
 
     def get_collection(self, collection_name):

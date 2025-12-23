@@ -1,0 +1,17 @@
+{"timestamp":"2025-12-15T16:45:27.510038Z","level":"info","event":"DAG bundles loaded: dags-folder","logger":"airflow.dag_processing.bundles.manager.DagBundlesManager","filename":"manager.py","lineno":179}
+{"timestamp":"2025-12-15T16:45:27.511295Z","level":"info","event":"Filling up the DagBag from /workspace/airflow/dags/pull_daily_ohlc_data_into_hdfs.py","logger":"airflow.models.dagbag.DagBag","filename":"dagbag.py","lineno":593}
+{"timestamp":"2025-12-15T16:45:31.343292Z","level":"info","event":"Trying to connect to namenode:9870","logger":"airflow.task.hooks.airflow.providers.apache.hdfs.hooks.webhdfs.WebHDFSHook","filename":"webhdfs.py","lineno":80}
+{"timestamp":"2025-12-15T16:45:31.344860Z","level":"info","event":"Trying namenode namenode","logger":"airflow.task.hooks.airflow.providers.apache.hdfs.hooks.webhdfs.WebHDFSHook","filename":"webhdfs.py","lineno":84}
+{"timestamp":"2025-12-15T16:45:31.345820Z","level":"info","event":"Instantiated <InsecureClient(url='http://namenode:9870')>.","logger":"hdfs.client","filename":"client.py","lineno":192}
+{"timestamp":"2025-12-15T16:45:31.346017Z","level":"info","event":"Fetching status for '/'.","logger":"hdfs.client","filename":"client.py","lineno":320}
+{"timestamp":"2025-12-15T16:45:31.356947Z","level":"info","event":"Using namenode namenode for hook","logger":"airflow.task.hooks.airflow.providers.apache.hdfs.hooks.webhdfs.WebHDFSHook","filename":"webhdfs.py","lineno":94}
+{"timestamp":"2025-12-15T16:45:31.357275Z","level":"info","event":"Creating directories to '/airflow/data/ingest_date=2025-05-16'.","logger":"hdfs.client","filename":"client.py","lineno":1028}
+{"timestamp":"2025-12-15T16:45:31.421187Z","level":"info","event":"Trying to connect to namenode:9870","logger":"airflow.task.hooks.airflow.providers.apache.hdfs.hooks.webhdfs.WebHDFSHook","filename":"webhdfs.py","lineno":80}
+{"timestamp":"2025-12-15T16:45:31.424157Z","level":"info","event":"Trying namenode namenode","logger":"airflow.task.hooks.airflow.providers.apache.hdfs.hooks.webhdfs.WebHDFSHook","filename":"webhdfs.py","lineno":84}
+{"timestamp":"2025-12-15T16:45:31.424847Z","level":"info","event":"Instantiated <InsecureClient(url='http://namenode:9870')>.","logger":"hdfs.client","filename":"client.py","lineno":192}
+{"timestamp":"2025-12-15T16:45:31.425088Z","level":"info","event":"Fetching status for '/'.","logger":"hdfs.client","filename":"client.py","lineno":320}
+{"timestamp":"2025-12-15T16:45:31.434539Z","level":"info","event":"Using namenode namenode for hook","logger":"airflow.task.hooks.airflow.providers.apache.hdfs.hooks.webhdfs.WebHDFSHook","filename":"webhdfs.py","lineno":94}
+{"timestamp":"2025-12-15T16:45:31.435020Z","level":"info","event":"Uploading '/workspace/airflow/data/output.parquet' to '/airflow/data/ingest_date=2025-05-16/data.parquet'.","logger":"hdfs.client","filename":"client.py","lineno":551}
+{"timestamp":"2025-12-15T16:45:31.435223Z","level":"info","event":"Listing '/airflow/data/ingest_date=2025-05-16/data.parquet'.","logger":"hdfs.client","filename":"client.py","lineno":1116}
+{"timestamp":"2025-12-15T16:45:31.447397Z","level":"info","event":"Writing to '/airflow/data/ingest_date=2025-05-16/data.parquet'.","logger":"hdfs.client","filename":"client.py","lineno":496}
+{"timestamp":"2025-12-15T16:45:31.508260Z","level":"info","event":"Done. Returned value was: None","logger":"airflow.task.operators.airflow.providers.standard.operators.python.PythonOperator","filename":"python.py","lineno":215}

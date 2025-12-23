@@ -1,32 +1,14 @@
-# Python virtual environment
-venv/
-
-#Logs
-logs/
-*.log
-
-# Environment variables
-.env
-
-# IDE specific files
-.vscode/
-.idea/
-
-# MacOS specific files
-.DS_Store
-
-# Temporary files
-tmp/
-temp/
-
-__pycache__
-
-test.*
-
-secret.json
-
-scripts/
-
-hdfs/data
-
-*.csv
+.venv/
+data/
+.data
+!data/company/.gitkeep
+!data/market/.gitkeep
+!data/news/.gitkeep
+!data/ohlc/.gitkeep
+!data/ohlc_remain/.gitkeep
+!data/news_remain/.gitkeep
+__pycache__/
+.airflow_venv
+.airflow_win
+.airflow
+local-data

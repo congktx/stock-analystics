@@ -1,0 +1,189 @@
+---
+# Flink ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flink-config
+  namespace: stock-analytics
+data:
+  flink-conf.yaml: |
+    jobmanager.rpc.address: flink-jobmanager
+    taskmanager.numberOfTaskSlots: 4
+    parallelism.default: 4
+    jobmanager.memory.process.size: 1600m
+    taskmanager.memory.process.size: 2048m
+    state.backend: rocksdb
+    state.checkpoints.dir: file:///tmp/flink-checkpoints
+    state.savepoints.dir: file:///tmp/flink-savepoints
+    execution.checkpointing.interval: 60000
+    execution.checkpointing.mode: EXACTLY_ONCE
+    execution.checkpointing.timeout: 600000
+    execution.checkpointing.max-concurrent-checkpoints: 1
+    restart-strategy: fixed-delay
+    restart-strategy.fixed-delay.attempts: 3
+    restart-strategy.fixed-delay.delay: 10s
+
+---
+# Flink JobManager Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-jobmanager
+  namespace: stock-analytics
+  labels:
+    app: flink
+    component: jobmanager
+spec:
+  ports:
+    - port: 8081
+      name: webui
+      targetPort: 8081
+      nodePort: 30081
+    - port: 6123
+      name: rpc
+      targetPort: 6123
+    - port: 6124
+      name: blob
+      targetPort: 6124
+  selector:
+    app: flink
+    component: jobmanager
+  type: NodePort
+
+---
+# Flink TaskManager Service (Headless)
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-taskmanager
+  namespace: stock-analytics
+  labels:
+    app: flink
+    component: taskmanager
+spec:
+  clusterIP: None
+  ports:
+    - port: 6121
+      name: data
+    - port: 6122
+      name: rpc
+  selector:
+    app: flink
+    component: taskmanager
+
+---
+# Flink JobManager Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-jobmanager
+  namespace: stock-analytics
+  labels:
+    app: flink
+    component: jobmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flink
+      component: jobmanager
+  template:
+    metadata:
+      labels:
+        app: flink
+        component: jobmanager
+    spec:
+      containers:
+      - name: jobmanager
+        image: flink:1.18-scala_2.12
+        args: ["jobmanager"]
+        ports:
+        - containerPort: 8081
+          name: webui
+        - containerPort: 6123
+          name: rpc
+        - containerPort: 6124
+          name: blob
+        env:
+        - name: FLINK_PROPERTIES
+          value: |
+            jobmanager.rpc.address: flink-jobmanager
+            parallelism.default: 4
+            state.backend: rocksdb
+            state.checkpoints.dir: file:///tmp/flink-checkpoints
+            state.savepoints.dir: file:///tmp/flink-savepoints
+            execution.checkpointing.interval: 60000
+            execution.checkpointing.mode: EXACTLY_ONCE
+        volumeMounts:
+        - name: flink-checkpoints
+          mountPath: /tmp/flink-checkpoints
+        - name: flink-savepoints
+          mountPath: /tmp/flink-savepoints
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: flink-checkpoints
+        emptyDir: {}
+      - name: flink-savepoints
+        emptyDir: {}
+
+---
+# Flink TaskManager Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-taskmanager
+  namespace: stock-analytics
+  labels:
+    app: flink
+    component: taskmanager
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flink
+      component: taskmanager
+  template:
+    metadata:
+      labels:
+        app: flink
+        component: taskmanager
+    spec:
+      containers:
+      - name: taskmanager
+        image: flink:1.18-scala_2.12
+        args: ["taskmanager"]
+        ports:
+        - containerPort: 6121
+          name: data
+        - containerPort: 6122
+          name: rpc
+        env:
+        - name: FLINK_PROPERTIES
+          value: |
+            jobmanager.rpc.address: flink-jobmanager
+            taskmanager.numberOfTaskSlots: 4
+            parallelism.default: 4
+            taskmanager.memory.process.size: 2048m
+        volumeMounts:
+        - name: flink-checkpoints
+          mountPath: /tmp/flink-checkpoints
+        - name: flink-savepoints
+          mountPath: /tmp/flink-savepoints
+        resources:
+          requests:
+            memory: "1.5Gi"
+            cpu: "500m"
+          limits:
+            memory: "2.5Gi"
+            cpu: "1000m"
+      volumes:
+      - name: flink-checkpoints
+        emptyDir: {}
+      - name: flink-savepoints
+        emptyDir: {}

@@ -1,0 +1,248 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hadoop
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hadoop-config
+  namespace: hadoop
+data:
+  core-site.xml: |
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <configuration>
+      <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://namenode:9000</value>
+      </property>
+      <property>
+        <name>hadoop.http.staticuser.user</name>
+        <value>root</value>
+      </property>
+    </configuration>
+  
+  hdfs-site.xml: |
+    <?xml version="1.0"?>
+    <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+    <configuration>
+      <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+      </property>
+      <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///hadoop/dfs/name</value>
+      </property>
+      <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///hadoop/dfs/data</value>
+      </property>
+      <property>
+        <name>dfs.namenode.http-address</name>
+        <value>0.0.0.0:9870</value>
+      </property>
+      <property>
+        <name>dfs.namenode.rpc-address</name>
+        <value>namenode:9000</value>
+      </property>
+      <property>
+        <name>dfs.permissions.enabled</name>
+        <value>false</value>
+      </property>
+    </configuration>
+---
+# NameNode Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: namenode
+  namespace: hadoop
+  labels:
+    app: namenode
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: namenode
+  template:
+    metadata:
+      labels:
+        app: namenode
+    spec:
+      containers:
+      - name: namenode
+        image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+        env:
+        - name: CLUSTER_NAME
+          value: "hadoop-cluster"
+        - name: CORE_CONF_fs_defaultFS
+          value: "hdfs://namenode:9000"
+        - name: HDFS_CONF_dfs_namenode_name_dir
+          value: "file:///hadoop/dfs/name"
+        ports:
+        - containerPort: 9870
+          name: web
+        - containerPort: 9000
+          name: rpc
+        volumeMounts:
+        - name: namenode-storage
+          mountPath: /hadoop/dfs/name
+        - name: hadoop-config
+          mountPath: /opt/hadoop/etc/hadoop/core-site.xml
+          subPath: core-site.xml
+        - name: hadoop-config
+          mountPath: /opt/hadoop/etc/hadoop/hdfs-site.xml
+          subPath: hdfs-site.xml
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: namenode-storage
+        persistentVolumeClaim:
+          claimName: namenode-pvc
+      - name: hadoop-config
+        configMap:
+          name: hadoop-config
+---
+# NameNode Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: namenode
+  namespace: hadoop
+  labels:
+    app: namenode
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9870
+    targetPort: 9870
+    name: web
+  - port: 9000
+    targetPort: 9000
+    name: rpc
+  selector:
+    app: namenode
+---
+# NameNode External Service (NodePort for access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: namenode-external
+  namespace: hadoop
+  labels:
+    app: namenode
+spec:
+  type: NodePort
+  ports:
+  - port: 9870
+    targetPort: 9870
+    nodePort: 30870
+    name: web
+  - port: 9000
+    targetPort: 9000
+    nodePort: 30900
+    name: rpc
+  selector:
+    app: namenode
+---
+# DataNode Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datanode
+  namespace: hadoop
+  labels:
+    app: datanode
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: datanode
+  template:
+    metadata:
+      labels:
+        app: datanode
+    spec:
+      containers:
+      - name: datanode
+        image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+        env:
+        - name: SERVICE_PRECONDITION
+          value: "namenode:9870"
+        - name: CORE_CONF_fs_defaultFS
+          value: "hdfs://namenode:9000"
+        - name: HDFS_CONF_dfs_datanode_data_dir
+          value: "file:///hadoop/dfs/data"
+        ports:
+        - containerPort: 9864
+          name: web
+        - containerPort: 9866
+          name: data-transfer
+        - containerPort: 9867
+          name: ipc
+        volumeMounts:
+        - name: datanode-storage
+          mountPath: /hadoop/dfs/data
+        - name: hadoop-config
+          mountPath: /opt/hadoop/etc/hadoop/core-site.xml
+          subPath: core-site.xml
+        - name: hadoop-config
+          mountPath: /opt/hadoop/etc/hadoop/hdfs-site.xml
+          subPath: hdfs-site.xml
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: datanode-storage
+        emptyDir: {}
+      - name: hadoop-config
+        configMap:
+          name: hadoop-config
+---
+# DataNode Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: datanode
+  namespace: hadoop
+  labels:
+    app: datanode
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 9864
+    targetPort: 9864
+    name: web
+  - port: 9866
+    targetPort: 9866
+    name: data-transfer
+  - port: 9867
+    targetPort: 9867
+    name: ipc
+  selector:
+    app: datanode
+---
+# PersistentVolumeClaim for NameNode
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: namenode-pvc
+  namespace: hadoop
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

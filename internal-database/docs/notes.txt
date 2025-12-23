@@ -1,0 +1,24 @@
+* Market status
+- market_type (string): Loại thị trường (markets)
+- region (string): Khu vực của thị trường (markets)
+- primary_exchanges (string): Các sàn giao dịch chính của thị trường (chia ra và cho vào exchanges)
+- local_close (string): Thời điểm đóng cửa địa phương của thị trường (markets)
+- local_open (string): Thời điểm mở cửa địa phương của thị trường (markets)
+- current_status (string): Trạng thái hiện thời (markets)
+- notes (string): Ghi chú đi kèm với market (markets)
+- time_update (number): Thời điểm update thông tin về thị trường (markets)
+
+* Company information
+- active (bool): Còn giao dịch trên sàn không. False có nghĩa là đã hủy niêm yết. (companies)
+- cik (string): mã CIK (dùng làm primary key cho bảng companies)
+- composite_figi (string): mã định danh toàn cầu cho các công cụ tài chính (companies)
+- currency_name (string): tên tiền tệ được sử dụng để giao dịch (companies)
+- locale (string): vị trí của thị trường (companies)
+- name (string): Tên của công ty (companies)
+- primary_exchange: sàn giao dịch chính (exchanges)
+- share_class_figi (string): mã figi cho từng cổ phiếu (companies)
+- ticker (string): ticker gắn với mã cổ phiếu của công ty (companies)
+- type: Loại tài sản (companies)
+- time_update: thời điểm cập nhật (companies)
+
+## sau khi insert dữ liệu thì biến đổi chú ý primary_exchange 1 chút

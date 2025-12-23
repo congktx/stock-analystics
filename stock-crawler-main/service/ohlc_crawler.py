@@ -1,4 +1,5 @@
 import time
+import logging
 
 import requests
 
@@ -8,12 +9,21 @@ from utils.time_utils import timestamp_to_date
 
 from config import PolygonConfig
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.kafka_producer import get_producer
+from kafka_config import KafkaConfig
+
+logger = logging.getLogger(__name__)
 mongodb = MongoDB()
+kafka_producer = get_producer()
 
 def get_ohlc(ticker, from_timestamp, to_timestamp):
     from_date = timestamp_to_date(from_timestamp)
     to_date = timestamp_to_date(to_timestamp)
-    url = f'https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/hour/{from_date}/{to_date}'
+    url = f'https://api.massive.com/v2/aggs/ticker/{ticker}/range/1/hour/{from_date}/{to_date}'
     
     headers = {
         "Content-Type": "application/json"
@@ -74,7 +84,21 @@ def load_all_ohlc_to_db(ticker, list_ohlc, time_update):
 
         list_documents.append(document)
     
-    mongodb.upsert_space_many_ohlc(list_documents)
+    # Try to send to Kafka first
+    if KafkaConfig.ENABLE_KAFKA:
+        try:
+            kafka_producer.send_batch(
+                KafkaConfig.TOPIC_OHLC_DATA,
+                list_documents,
+                key_field='ticker'
+            )
+        except Exception as e:
+            logger.error(f"Error sending OHLC to Kafka: {e}")
+    
+    # Fallback to MongoDB or use as primary storage
+    if not KafkaConfig.ENABLE_KAFKA or KafkaConfig.FALLBACK_TO_MONGODB:
+        mongodb.upsert_space_many_ohlc(list_documents)
+    
     time.sleep(0.1)
         
 def crawl_all_ohlc(from_timestamp, to_timestamp, time_update):

@@ -37,7 +37,7 @@ def pull_daily_ohlc_data(from_timestamp: int, to_timestamp: int):
     params = {
         "from_timestamp": from_timestamp,
         "to_timestamp": to_timestamp,
-        "limit": 200000,
+        "limit": 20000,
         "page": 1
     }
 

@@ -57,11 +57,11 @@ class StockDataConsumer:
     
     def shutdown(self, signum=None, frame=None):
         """Graceful shutdown"""
-        logger.info("\n🛑 Shutting down consumer...")
+        logger.info("\n Shutting down consumer...")
         self.running = False
         if self.consumer:
             self.consumer.close()
-        logger.info(f"📊 Stats - Processed: {self.processed_count}, Errors: {self.error_count}")
+        logger.info(f"Stats - Processed: {self.processed_count}, Errors: {self.error_count}")
     
     def process_ohlc_message(self, data: Dict[str, Any]) -> bool:
         try:

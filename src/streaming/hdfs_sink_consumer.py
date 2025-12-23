@@ -37,13 +37,13 @@ class HDFSSinkConsumer:
     
     def __init__(
         self,
-        hdfs_base_path: str = "/stock-data/news/raw",
-        hdfs_namenode: str = "http://localhost:9870",
+        hdfs_base_path: str = "/stock-data/news/processed",
+        hdfs_namenode = "http://192.168.0.121:9870",
         hdfs_user: str = "root",
-        local_fallback: bool = True,
-        local_base_path: str = "F:/stock-data/news/raw",
-        batch_size: int = 1000,
-        flush_interval_seconds: int = 60
+        local_fallback: bool = False,
+        local_base_path: str = "airflow/data/news/",
+        batch_size: int = 100,
+        flush_interval_seconds: int = 30
     ):
         """
         Initialize HDFS sink consumer
@@ -75,22 +75,39 @@ class HDFSSinkConsumer:
         # Track files per partition for merging
         self.partition_files = {}  # {partition_path: [file_paths]}
         
-        # Try HDFS connection, fallback to local
-        self.use_local = True
-        if not local_fallback:
+        # Try HDFS connection, fallback to local only if allowed
+        self.use_local = local_fallback
+        self.hdfs_client = None
+
+        if not self.use_local:
             try:
                 from hdfs import InsecureClient
                 self.hdfs_client = InsecureClient(self.hdfs_namenode, user=self.hdfs_user)
+                # Test connection
                 self.hdfs_client.status('/')
-                self.use_local = False
-                logger.info(f"✅ Connected to HDFS: {self.hdfs_namenode}")
+                logger.info(f" Connected to HDFS NameNode: {self.hdfs_namenode}")
+                logger.info(f" HDFS base path: {self.hdfs_base_path}")
+                # Create base directory if not exists
+                try:
+                    if self.hdfs_client is not None:
+                        self.hdfs_client.makedirs(self.hdfs_base_path)
+                        logger.info(f" Created HDFS directory: {self.hdfs_base_path}")
+                except Exception as e:
+                    # Directory might already exist
+                    pass
+            except ImportError:
+                logger.error(" hdfs library not installed. Install with: pip install hdfs")
+                if not local_fallback:
+                    raise Exception("HDFS library required but not installed")
+                self.use_local = True
             except Exception as e:
-                logger.warning(f"HDFS not available: {e}")
+                logger.warning(f" HDFS not available: {e}")
                 if not local_fallback:
                     raise
-        
+                self.use_local = True
+
         if self.use_local:
-            logger.info(f"📁 Using local storage: {self.local_base_path}")
+            logger.info(f" Using local storage: {self.local_base_path}")
             Path(self.local_base_path).mkdir(parents=True, exist_ok=True)
     
     def connect_kafka(self):
@@ -102,13 +119,14 @@ class HDFSSinkConsumer:
         consumer_config['group_id'] = 'hdfs-sink-group'
         consumer_config['enable_auto_commit'] = False
         
+        # Consume from processed topic (after Flink enrichment)
         self.consumer = KafkaConsumer(
-            KafkaConfig.TOPIC_NEWS_SENTIMENT,
+            KafkaConfig.TOPIC_NEWS_PROCESSED,
             **consumer_config,
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
         
-        logger.info(f"✅ Subscribed to topic: {KafkaConfig.TOPIC_NEWS_SENTIMENT}")
+        logger.info(f"Subscribed to topic: {KafkaConfig.TOPIC_NEWS_PROCESSED}")
     
     def get_partition_path(self, timestamp_str: str) -> str:
         """
@@ -142,13 +160,15 @@ class HDFSSinkConsumer:
         Flatten nested message structure for Parquet storage
         
         Args:
-            msg: Kafka message
+            msg: Kafka message (from Flink-processed topic)
             
         Returns:
             Flattened dict
         """
-        data = msg.get('data', {})
+        # Handle both Flink-enriched format and original format
+        data = msg.get('data', msg)  # Support both nested and flat structure
         metadata = msg.get('metadata', {})
+        sentiment_analytics = msg.get('sentiment_analytics', {})
         
         # Flatten ticker sentiment (take first ticker for simplicity)
         ticker_sentiment = data.get('ticker_sentiment', [])
@@ -162,8 +182,10 @@ class HDFSSinkConsumer:
             'message_id': msg.get('message_id', ''),
             'source_id': msg.get('source_id', ''),
             'timestamp': msg.get('timestamp', ''),
+            'processed_timestamp': msg.get('processed_timestamp', ''),
             'ingest_timestamp': ingest_timestamp,
             'producer': metadata.get('producer', ''),
+            'processor': msg.get('processor', ''),
             'partition_key': metadata.get('partition_key', ''),
             
             # News data
@@ -175,9 +197,15 @@ class HDFSSinkConsumer:
             'source_domain': data.get('source_domain', ''),
             'category_within_source': data.get('category_within_source', ''),
             
-            # Sentiment
+            # Sentiment (original)
             'overall_sentiment_score': float(data.get('overall_sentiment_score', 0.0)),
             'overall_sentiment_label': data.get('overall_sentiment_label', ''),
+            
+            # Sentiment analytics (from Flink)
+            'sentiment_category': sentiment_analytics.get('sentiment_category', ''),
+            'ticker_count': sentiment_analytics.get('ticker_count', 0),
+            'avg_weighted_sentiment': float(sentiment_analytics.get('avg_weighted_sentiment', 0.0)),
+            'total_relevance': float(sentiment_analytics.get('total_relevance', 0.0)),
             
             # Primary ticker
             'primary_ticker': primary_ticker.get('ticker', ''),
@@ -186,6 +214,7 @@ class HDFSSinkConsumer:
             
             # Raw JSON for full data
             'ticker_sentiment_json': json.dumps(ticker_sentiment),
+            'sentiment_analytics_json': json.dumps(sentiment_analytics),
             'topics_json': json.dumps(data.get('topics', [])),
             'authors_json': json.dumps(data.get('authors', []))
         }
@@ -218,7 +247,7 @@ class HDFSSinkConsumer:
             
             # Write locally
             pq.write_table(table, str(file_path), compression='snappy')
-            logger.info(f"✅ Wrote {len(records)} records to {file_path}")
+            logger.info(f" Wrote {len(records)} records to {file_path}")
             
             # Track file for potential merging
             if partition_path not in self.partition_files:
@@ -228,16 +257,33 @@ class HDFSSinkConsumer:
             # Write to HDFS
             hdfs_path = f"{self.hdfs_base_path}/{partition_path}/{filename}"
             
+            # Ensure partition directory exists
+            partition_full_path = f"{self.hdfs_base_path}/{partition_path}"
+            try:
+                if self.hdfs_client is not None:
+                    self.hdfs_client.makedirs(partition_full_path)
+            except:
+                pass  # Directory might exist
+            
             # Write to temp file first
-            temp_path = f"/tmp/{filename}"
-            pq.write_table(table, temp_path, compression='snappy')
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.parquet') as temp_file:
+                temp_path = temp_file.name
+                pq.write_table(table, temp_path, compression='snappy')
             
             # Upload to HDFS
-            with open(temp_path, 'rb') as f:
-                self.hdfs_client.write(hdfs_path, f, overwrite=False)
-            
-            os.remove(temp_path)
-            logger.info(f"✅ Wrote {len(records)} records to HDFS: {hdfs_path}")
+            try:
+                if self.hdfs_client is not None:
+                    with open(temp_path, 'rb') as f:
+                        self.hdfs_client.write(hdfs_path, f, overwrite=False)
+                    logger.info(f"Wrote {len(records)} records to HDFS: {hdfs_path}")
+                    logger.info(f"   View at: {self.hdfs_namenode}/explorer.html#/{hdfs_path}")
+                else:
+                    logger.error(" HDFS client is not initialized. Cannot write to HDFS.")
+            finally:
+                # Clean up temp file
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
         
         self.messages_written += len(records)
     
@@ -283,13 +329,13 @@ class HDFSSinkConsumer:
                     if Path(file_path).exists():
                         Path(file_path).unlink()
                 
-                logger.info(f"✅ Merged {len(files)} files into {merged_file_path} ({len(merged_table)} records)")
+                logger.info(f" Merged {len(files)} files into {merged_file_path} ({len(merged_table)} records)")
                 
                 # Update tracking
                 self.partition_files[partition_path] = [str(merged_file_path)]
         
         except Exception as e:
-            logger.error(f"❌ Error merging files in {partition_path}: {e}")
+            logger.error(f" Error merging files in {partition_path}: {e}")
     
     def flush_buffer(self):
         """Flush buffered messages to Parquet files"""
@@ -329,7 +375,7 @@ class HDFSSinkConsumer:
         # Commit offset
         if self.consumer:
             self.consumer.commit()
-            logger.info("✅ Kafka offset committed")
+            logger.info(" Kafka offset committed")
     
     def should_flush(self) -> bool:
         """Check if buffer should be flushed"""
@@ -344,10 +390,10 @@ class HDFSSinkConsumer:
     
     def run(self):
         """Main consumer loop"""
-        logger.info("🔄 Starting HDFS sink consumer...")
+        logger.info(" Starting HDFS sink consumer...")
         
         if not self.consumer:
-            logger.error("❌ Kafka consumer not connected. Call connect_kafka() first.")
+            logger.error(" Kafka consumer not connected. Call connect_kafka() first.")
             return
         
         try:
@@ -369,7 +415,7 @@ class HDFSSinkConsumer:
                     self.flush_buffer()
         
         except KeyboardInterrupt:
-            logger.info("\n⚠️  Interrupted by user")
+            logger.info("\n Interrupted by user")
         finally:
             # Final flush
             if self.buffer:
@@ -388,7 +434,7 @@ class HDFSSinkConsumer:
                 self.consumer.close()
             
             logger.info(
-                f"✅ Consumer stopped. Total consumed: {self.messages_consumed}, "
+                f"Consumer stopped. Total consumed: {self.messages_consumed}, "
                 f"Total written: {self.messages_written}"
             )
 
@@ -400,12 +446,12 @@ def main():
     parser = argparse.ArgumentParser(description='HDFS Sink Consumer for News Data')
     parser.add_argument(
         '--hdfs-path',
-        default='/stock-data/news/raw',
+        default='/stock-data/news/processed',
         help='Base path in HDFS'
     )
     parser.add_argument(
         '--hdfs-namenode',
-        default='http://localhost:9870',
+        default='http://192.168.0.121:9870',
         help='HDFS NameNode URL (e.g., http://namenode.hadoop.svc.cluster.local:9870 for K8s)'
     )
     parser.add_argument(
@@ -415,19 +461,19 @@ def main():
     )
     parser.add_argument(
         '--local-path',
-        default='F:/stock-data/news/raw',
+        default='airflow/data/news/',
         help='Local fallback path'
     )
     parser.add_argument(
         '--batch-size',
         type=int,
-        default=1000,
+        default=100,
         help='Batch size before flush'
     )
     parser.add_argument(
         '--flush-interval',
         type=int,
-        default=60,
+        default=30,
         help='Flush interval in seconds'
     )
     parser.add_argument(
@@ -435,8 +481,20 @@ def main():
         action='store_true',
         help='Disable local fallback (HDFS only)'
     )
+    parser.add_argument(
+        '--use-local',
+        action='store_true',
+        help='Force local storage (skip HDFS)'
+    )
     
     args = parser.parse_args()
+    
+    # Determine local_fallback based on flags
+    if args.use_local:
+        local_fallback = True
+        logger.info("Forced local storage mode")
+    else:
+        local_fallback = not args.no_local_fallback
     
     # Create consumer
     consumer = HDFSSinkConsumer(
@@ -453,7 +511,7 @@ def main():
         consumer.connect_kafka()
         consumer.run()
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}")
+        logger.error(f"Fatal error: {e}")
         sys.exit(1)
 
 

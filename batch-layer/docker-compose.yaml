@@ -1,0 +1,116 @@
+services:
+    namenode:
+        image: loind31/hdfs-spark-base-img:v0
+        hostname: namenode
+        container_name: namenode
+        command: >
+            /bin/bash -c "
+            if [ ! -d /workspace/hadoop/dfs/name/current ]; then
+                echo 'Formatting namenode...';
+                hdfs namenode -format -force;
+            fi;
+
+            echo 'Starting namenode...';
+            hdfs namenode &
+
+            echo 'Starting ResourceManager...';
+            yarn --daemon start resourcemanager;
+
+            echo 'Starting MapReduce HistoryServer...';
+            mapred --daemon start historyserver;
+
+            echo 'Waiting for HDFS to be ready...';
+            until hdfs dfsadmin -report > /dev/null 2>&1; do
+                echo 'HDFS not ready yet. Retrying in 3s...';
+                sleep 3;
+            done;
+
+            echo 'HDFS is ready. Creating warehouse and spark-events directories...';
+            hdfs dfs -mkdir -p /workspace/hive/data/warehouse || echo 'Warehouse already exists.';
+            hdfs dfs -chmod 777 /workspace/hive/data/warehouse;
+
+            hdfs dfs -mkdir -p /airflow/data/ || echo 'Airflow data directory already exists.';
+            hdfs dfs -mkdir -p /airflow/data/ohlc || echo 'OHLC directory already exists.';
+            hdfs dfs -mkdir -p /airflow/data/companies || echo 'Companies directory already exists.';
+            hdfs dfs -mkdir -p /airflow/data/news || echo 'News directory already exists.';
+            hdfs dfs -chmod 777 /airflow/data/;
+            mkdir -p /workspace/spark-events;
+            echo 'spark.eventLog.enabled true' > /workspace/spark/conf/spark-defaults.conf;
+            echo 'spark.eventLog.dir file:/workspace/spark-events' >> /workspace/spark/conf/spark-defaults.conf;
+            echo 'spark.history.fs.logDirectory file:/workspace/spark-events' >> /workspace/spark/conf/spark-defaults.conf;
+
+            echo 'Starting Spark History Server...';
+            start-history-server.sh &
+
+            echo 'Starting Jupyter Notebook...';
+            nohup jupyter lab --ip=0.0.0.0 --no-browser --allow-root --port=8888 > /workspace/jupyter.log 2>&1 &
+
+            echo 'All services started. Keeping container alive...';
+            tail -f /dev/null
+            "
+
+        ports:
+            - 8088:8088      # YARN ResourceManager
+            - 19888:19888    # MapReduce History Server
+            - 9870:9870      # HDFS NameNode Web UI
+            - 9000:9000      # HDFS NameNode RPC (for K8s Flink)
+            - 8020:8020      # HDFS NameNode RPC (alternative)
+            - 8888:8888      # Jupyter Lab
+            - 18080:18080    # Spark History Server
+            - 15002:15002    # Custom port
+            - 4040:4040      # Spark UI
+        networks:
+            - hdfs-network
+        volumes:
+            - ./hdfs-spark/connector/mssql-jdbc-12.2.0.jre11.jar:/workspace/spark/jars/mssql-jdbc-12.2.0.jre11.jar
+            - ./hdfs-spark/config/spark-defaults.conf:/workspace/spark/conf/spark-defaults.conf
+            - ./hdfs-spark/config/common/hdfs-site.xml:/workspace/hadoop/etc/hadoop/hdfs-site.xml
+            - ./hdfs-spark/config/common/core-site.xml:/workspace/hadoop/etc/hadoop/core-site.xml
+            - ./hdfs-spark/config/common/mapred-site.xml:/workspace/hadoop/etc/hadoop/mapred-site.xml
+            - ./hdfs-spark/config/common/yarn-site.xml:/workspace/hadoop/etc/hadoop/yarn-site.xml
+            - ./hdfs-spark/local-data:/workspace/hadoop/local-data
+            - script-src:/workspace/src
+        depends_on:
+            - datanode-nodemanager-1
+            - datanode-nodemanager-2
+
+    datanode-nodemanager-1:
+        image: loind31/hdfs-spark-base-img:v0
+        hostname: datanode-nodemanager-1
+        container_name: datanode-nodemanager-1
+        ports:
+            - 8043:8042      # YARN NodeManager Web UI
+            - 9864:9864      # DataNode WebHDFS (THÊM DÒNG NÀY)
+            - 9866:9866      # DataNode data transfer (THÊM DÒNG NÀY)
+        networks:
+            - hdfs-network
+        command: ["/bin/bash", "-c", "hdfs --daemon start datanode; yarn --daemon start nodemanager; sleep 3; tail -f /dev/null"]
+        volumes:
+            - ./hdfs-spark/connector/mssql-jdbc-12.2.0.jre11.jar:/workspace/spark/jars/mssql-jdbc-12.2.0.jre11.jar
+            - ./hdfs-spark/config/common/hdfs-site.xml:/workspace/hadoop/etc/hadoop/hdfs-site.xml
+            - ./hdfs-spark/config/common/core-site.xml:/workspace/hadoop/etc/hadoop/core-site.xml
+            - ./hdfs-spark/config/common/mapred-site.xml:/workspace/hadoop/etc/hadoop/mapred-site.xml
+            - ./hdfs-spark/config/common/yarn-site.xml:/workspace/hadoop/etc/hadoop/yarn-site.xml
+
+    datanode-nodemanager-2:
+        image: loind31/hdfs-spark-base-img:v0
+        hostname: datanode-nodemanager-2
+        container_name: datanode-nodemanager-2
+        ports:
+            - 8044:8042      # YARN NodeManager Web UI
+            - 9865:9864      # DataNode WebHDFS (THÊM DÒNG NÀY - port khác để tránh conflict)
+            - 9867:9866      # DataNode data transfer (THÊM DÒNG NÀY)
+        networks:
+            - hdfs-network
+        command: ["/bin/bash", "-c", "hdfs --daemon start datanode; yarn --daemon start nodemanager; sleep 3; tail -f /dev/null"]
+        volumes:
+            - ./hdfs-spark/connector/mssql-jdbc-12.2.0.jre11.jar:/workspace/spark/jars/mssql-jdbc-12.2.0.jre11.jar
+            - ./hdfs-spark/config/common/hdfs-site.xml:/workspace/hadoop/etc/hadoop/hdfs-site.xml
+            - ./hdfs-spark/config/common/yarn-site.xml:/workspace/hadoop/etc/hadoop/yarn-site.xml
+
+networks:
+    hdfs-network:
+        driver: bridge
+
+volumes:
+    script-src:

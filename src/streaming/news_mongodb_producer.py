@@ -1,7 +1,3 @@
-"""
-News Data Producer: MongoDB to Kafka
-Reads news sentiment data from MongoDB and publishes to Kafka topic
-"""
 import os
 import sys
 import json
@@ -76,7 +72,7 @@ class NewsMongoDBProducer:
             
             # Test connection
             self.mongo_client.server_info()
-            logger.info(f"✅ Connected to MongoDB database: {self.mongodb_database}")
+            logger.info(f"Connected to MongoDB database: {self.mongodb_database}")
             
             # Kafka
             logger.info(f"Connecting to Kafka: {KafkaConfig.BOOTSTRAP_SERVERS}")
@@ -85,13 +81,13 @@ class NewsMongoDBProducer:
                 value_serializer=lambda v: json.dumps(v, default=str).encode('utf-8'),
                 key_serializer=lambda k: k.encode('utf-8') if k else None
             )
-            logger.info(f"✅ Kafka producer initialized")
+            logger.info(f"Kafka producer initialized")
             
             # Redis (optional)
             if self.enable_deduplication:
                 try:
                     self.redis_cache = RedisCache()
-                    logger.info("✅ Redis cache connected for deduplication")
+                    logger.info("Redis cache connected for deduplication")
                 except Exception as e:
                     logger.warning(f"Redis not available, deduplication disabled: {e}")
                     self.enable_deduplication = False
@@ -113,7 +109,7 @@ class NewsMongoDBProducer:
         if self.redis_cache:
             self.redis_cache.close()
         
-        logger.info(f"✅ Connections closed. Stats: Sent={self.messages_sent}, "
+        logger.info(f"Connections closed. Stats: Sent={self.messages_sent}, "
                    f"Failed={self.messages_failed}, Skipped={self.messages_skipped}")
     
     def is_already_processed(self, doc_id: str) -> bool:
@@ -229,7 +225,7 @@ class NewsMongoDBProducer:
             True if successful, False otherwise
         """
         if not self.kafka_producer:
-            logger.error("❌ Kafka producer not connected")
+            logger.error("Kafka producer not connected")
             return False
         
         try:
@@ -243,7 +239,7 @@ class NewsMongoDBProducer:
             record_metadata = future.get(timeout=10)
             
             logger.debug(
-                f"✅ Sent message {message['message_id']} "
+                f"Sent message {message['message_id']} "
                 f"to partition {record_metadata.partition} "
                 f"at offset {record_metadata.offset}"
             )
@@ -252,11 +248,11 @@ class NewsMongoDBProducer:
             return True
             
         except KafkaError as e:
-            logger.error(f"❌ Kafka error sending message: {e}")
+            logger.error(f"Kafka error sending message: {e}")
             self.messages_failed += 1
             return False
         except Exception as e:
-            logger.error(f"❌ Error sending message: {e}")
+            logger.error(f"Error sending message: {e}")
             self.messages_failed += 1
             return False
     
@@ -293,7 +289,7 @@ class NewsMongoDBProducer:
                 # Convert YYYY-MM-DD to Alpha Vantage format: YYYYMMDD
                 start_dt = datetime.strptime(start_date, '%Y-%m-%d')
                 query['time_published']['$gte'] = start_dt.strftime('%Y%m%dT%H%M%S')
-                logger.info(f"📅 Filtering news from: {start_date}")
+                logger.info(f"Filtering news from: {start_date}")
             
             if end_date:
                 end_dt = datetime.strptime(end_date, '%Y-%m-%d')
@@ -301,10 +297,10 @@ class NewsMongoDBProducer:
                 from datetime import timedelta
                 end_dt = end_dt + timedelta(days=1)
                 query['time_published']['$lt'] = end_dt.strftime('%Y%m%dT%H%M%S')
-                logger.info(f"📅 Filtering news until: {end_date}")
+                logger.info(f"Filtering news until: {end_date}")
         
         if not self.kafka_producer:
-            logger.error("❌ Kafka producer not connected. Call connect() first.")
+            logger.error("Kafka producer not connected. Call connect() first.")
             return 0
         
         # Find documents
@@ -352,7 +348,7 @@ class NewsMongoDBProducer:
         elapsed = time.time() - batch_start
         rate = batch_sent / elapsed if elapsed > 0 else 0
         logger.info(
-            f"✅ Batch complete: {batch_sent} messages sent in {elapsed:.1f}s "
+            f"Batch complete: {batch_sent} messages sent in {elapsed:.1f}s "
             f"({rate:.1f} msg/sec)"
         )
         
@@ -365,7 +361,7 @@ class NewsMongoDBProducer:
         Args:
             poll_interval_seconds: Seconds to wait between polls
         """
-        logger.info(f"🔄 Starting continuous mode (poll interval: {poll_interval_seconds}s)")
+        logger.info(f"Starting continuous mode (poll interval: {poll_interval_seconds}s)")
         
         try:
             while True:
@@ -379,9 +375,9 @@ class NewsMongoDBProducer:
                 time.sleep(poll_interval_seconds)
                 
         except KeyboardInterrupt:
-            logger.info("\n⚠️  Interrupted by user")
+            logger.info("\nInterrupted by user")
         except Exception as e:
-            logger.error(f"❌ Error in continuous mode: {e}")
+            logger.error(f"Error in continuous mode: {e}")
             raise
         finally:
             self.close()
@@ -472,7 +468,7 @@ def main():
             producer.close()
     
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}")
+        logger.error(f"Fatal error: {e}")
         sys.exit(1)
 
 

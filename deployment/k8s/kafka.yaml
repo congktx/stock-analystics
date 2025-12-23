@@ -26,6 +26,9 @@ spec:
     - port: 9092
       name: internal
       targetPort: 9092
+    - port: 9093
+      name: controller
+      targetPort: 9093
     - port: 29092
       name: cluster
       targetPort: 29092
@@ -77,6 +80,8 @@ spec:
         ports:
         - containerPort: 9092
           name: client
+        - containerPort: 9093
+          name: controller
         - containerPort: 9094
           name: external
         env:
@@ -89,7 +94,7 @@ spec:
         - name: KAFKA_LISTENERS
           value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9094"
         - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:30092"
+          value: "PLAINTEXT://kafka.stock-analytics.svc.cluster.local:9092,EXTERNAL://localhost:30092"
         - name: KAFKA_CONTROLLER_LISTENER_NAMES
           value: "CONTROLLER"
         - name: KAFKA_INTER_BROKER_LISTENER_NAME
@@ -103,13 +108,16 @@ spec:
         - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
           value: "1"
         - name: KAFKA_LOG_DIRS
-          value: "/tmp/kraft-combined-logs"
+          value: "/var/lib/kafka/data"
         - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
           value: "true"
         - name: KAFKA_LOG_RETENTION_HOURS
           value: "168"
         - name: CLUSTER_ID
           value: "MkU3OEVBNTcwNTJENDM2Qk"
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
         resources:
           requests:
             memory: "1Gi"
@@ -131,4 +139,7 @@ spec:
           periodSeconds: 20
           timeoutSeconds: 5
           failureThreshold: 3
-      volumes: []
+      volumes:
+      - name: kafka-data
+        persistentVolumeClaim:
+          claimName: kafka-data-pvc

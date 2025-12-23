@@ -1,7 +1,11 @@
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env file if available (optional for containers)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # Skip if dotenv not installed
 
 
 class MongoDBConfig:

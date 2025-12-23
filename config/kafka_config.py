@@ -1,8 +1,12 @@
 import os
 import platform
-from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env file if available (optional for containers)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # Skip if dotenv not installed (e.g., in Flink container)
 
 
 def _add_kafka_to_hosts():
@@ -37,12 +41,26 @@ def _add_kafka_to_hosts():
 _add_kafka_to_hosts()
 
 
+def _get_default_kafka_servers():
+    """Auto-detect Kafka broker based on environment"""
+    # Check if running in K8s pod
+    if os.path.exists('/var/run/secrets/kubernetes.io'):
+        # Inside K8s pod - use full service name with namespace
+        # This prevents DNS resolving to localhost
+        return "kafka.stock-analytics.svc.cluster.local:9092"
+    else:
+        # Outside K8s - use NodePort with hosts entry
+        return "kafka:30092"
+
+
 class KafkaConfig:
     # Kafka Broker Settings
-    # K8s NodePort with port-forward: kafka:30092 (requires hosts entry: 127.0.0.1 kafka)
-    # K8s Internal: kafka:9092 (from within pods)
-    # Docker: localhost:9092
-    BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:30092")
+    # Auto-detect environment:
+    # - K8s Internal (from pods): kafka:9092
+    # - K8s NodePort (from localhost): kafka:30092
+    # - Docker: localhost:9092
+    
+    BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", _get_default_kafka_servers())
     CLIENT_ID = os.environ.get("KAFKA_CLIENT_ID", "stock-crawler")
     
     # Producer Settings
@@ -72,6 +90,10 @@ class KafkaConfig:
     
     # Topic Names
     TOPIC_NEWS_SENTIMENT = "stock-news-sentiment"
+    TOPIC_NEWS_PROCESSED = "stock-news-processed"  
+    TOPIC_SQL_MAPPING = "news-ticker-mapping"
+    TOPIC_SENTIMENT_DAILY = "ticker-sentiment-daily"
+    TOPIC_RAW_SQL_DATA = "raw-sql-data"
     TOPIC_OHLC_DATA = "stock-ohlc-data"
     TOPIC_COMPANY_INFO = "stock-company-info"
     TOPIC_MARKET_STATUS = "stock-market-status"
@@ -82,6 +104,15 @@ class KafkaConfig:
     # Topic Configurations
     TOPIC_CONFIGS = {
         TOPIC_NEWS_SENTIMENT: {
+            'num_partitions': 8,
+            'replication_factor': 1,
+            'config': {
+                'retention.ms': 604800000,  # 7 days
+                'cleanup.policy': 'delete',
+                'compression.type': 'gzip',
+            }
+        },
+        TOPIC_NEWS_PROCESSED: {
             'num_partitions': 8,
             'replication_factor': 1,
             'config': {

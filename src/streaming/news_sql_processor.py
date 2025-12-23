@@ -1,7 +1,3 @@
-"""
-SQL Server Sink: News Processor
-Consumes news data from Kafka, performs ETL, and writes to SQL Server
-"""
 import os
 import sys
 import json
@@ -32,11 +28,11 @@ class SQLServerSink:
     
     def __init__(
         self,
-        server: str = "localhost",
+        server: str = "192.168.0.121",
         port: int = 1433,
-        database: str = "news_analytics",
-        username: Optional[str] = None,
-        password: Optional[str] = None,
+        database: str = "Streaming",
+        username: Optional[str] = "sa",
+        password: Optional[str] = "YourStrong@Password123",
         driver: str = "{ODBC Driver 17 for SQL Server}"
     ):
         """Initialize SQL Server connection"""
@@ -72,9 +68,9 @@ class SQLServerSink:
         try:
             self.conn = pyodbc.connect(conn_str, autocommit=False)
             self.cursor = self.conn.cursor()
-            logger.info(f"✅ Connected to SQL Server: {self.server}/{self.database}")
+            logger.info(f"Connected to SQL Server: {self.server}/{self.database}")
         except Exception as e:
-            logger.error(f"❌ SQL Server connection error: {e}")
+            logger.error(f"SQL Server connection error: {e}")
             raise
     
     def close(self):
@@ -99,7 +95,7 @@ class SQLServerSink:
             return 0
         
         if not self.cursor or not self.conn:
-            logger.error("❌ Database connection not established")
+            logger.error("Database connection not established")
             return 0
         
         sql = """
@@ -132,7 +128,7 @@ class SQLServerSink:
         try:
             self.cursor.executemany(sql, values)
             self.conn.commit()
-            logger.info(f"✅ Inserted {len(records)} news records")
+            logger.info(f"Inserted {len(records)} news records")
             return len(records)
         except pyodbc.IntegrityError as e:
             # Handle duplicates
@@ -141,11 +137,11 @@ class SQLServerSink:
                 self.conn.rollback()
                 return 0
             else:
-                logger.error(f"❌ Insert error: {e}")
+                logger.error(f"Insert error: {e}")
                 self.conn.rollback()
                 raise
         except Exception as e:
-            logger.error(f"❌ Insert error: {e}")
+            logger.error(f"Insert error: {e}")
             self.conn.rollback()
             raise
     
@@ -163,7 +159,7 @@ class SQLServerSink:
             return 0
         
         if not self.cursor or not self.conn:
-            logger.error("❌ Database connection not established")
+            logger.error("Database connection not established")
             return 0
         
         # First, get news IDs for the message_ids
@@ -219,10 +215,10 @@ class SQLServerSink:
         try:
             self.cursor.executemany(sql, values)
             self.conn.commit()
-            logger.info(f"✅ Inserted {len(values)} ticker mappings")
+            logger.info(f"Inserted {len(values)} ticker mappings")
             return len(values)
         except Exception as e:
-            logger.error(f"❌ Ticker mapping insert error: {e}")
+            logger.error(f"Ticker mapping insert error: {e}")
             self.conn.rollback()
             raise
     
@@ -271,17 +267,17 @@ class SQLServerSink:
         """
         
         if not self.cursor or not self.conn:
-            logger.error("❌ Database connection not established")
+            logger.error(" Database connection not established")
             return 0
         
         try:
             self.cursor.execute(sql, (date,))
             rows_affected = self.cursor.rowcount
             self.conn.commit()
-            logger.info(f"✅ Updated {rows_affected} ticker daily aggregates for {date}")
+            logger.info(f" Updated {rows_affected} ticker daily aggregates for {date}")
             return rows_affected
         except Exception as e:
-            logger.error(f"❌ Aggregate update error: {e}")
+            logger.error(f" Aggregate update error: {e}")
             self.conn.rollback()
             raise
     
@@ -356,7 +352,7 @@ class NewsProcessor:
             **consumer_config,
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
-        logger.info(f"✅ Subscribed to topic: {KafkaConfig.TOPIC_NEWS_SENTIMENT}")
+        logger.info(f" Subscribed to topic: {KafkaConfig.TOPIC_NEWS_SENTIMENT}")
         
         # SQL Server
         self.sql_sink = SQLServerSink(**self.sql_server_config)
@@ -370,7 +366,7 @@ class NewsProcessor:
             self.sql_sink.close()
         
         logger.info(
-            f"✅ Processor stopped. Consumed: {self.messages_consumed}, "
+            f" Processor stopped. Consumed: {self.messages_consumed}, "
             f"Processed: {self.messages_processed}, Failed: {self.messages_failed}"
         )
     
@@ -380,7 +376,7 @@ class NewsProcessor:
             return
         
         if not self.sql_sink:
-            logger.error("❌ SQL Server not connected")
+            logger.error(" SQL Server not connected")
             return
         
         logger.info(f"Processing batch of {len(self.buffer)} messages...")
@@ -409,7 +405,7 @@ class NewsProcessor:
             self.messages_processed += len(self.buffer)
             
         except Exception as e:
-            logger.error(f"❌ Batch processing error: {e}")
+            logger.error(f"Batch processing error: {e}")
             self.messages_failed += len(self.buffer)
         finally:
             # Clear buffer
@@ -419,7 +415,7 @@ class NewsProcessor:
             if self.consumer:
                 self.consumer.commit()
                 self.last_commit_time = datetime.now()
-                logger.info("✅ Kafka offset committed")
+                logger.info("Kafka offset committed")
     
     def should_process(self) -> bool:
         """Check if buffer should be processed"""
@@ -434,10 +430,10 @@ class NewsProcessor:
     
     def run(self):
         """Main processing loop"""
-        logger.info("🔄 Starting news processor...")
+        logger.info("Starting news processor...")
         
         if not self.consumer:
-            logger.error("❌ Kafka consumer not connected. Call connect() first.")
+            logger.error(" Kafka consumer not connected. Call connect() first.")
             return
         
         try:
@@ -459,9 +455,9 @@ class NewsProcessor:
                     self.process_batch()
         
         except KeyboardInterrupt:
-            logger.info("\n⚠️  Interrupted by user")
+            logger.info("\n Interrupted by user")
         except Exception as e:
-            logger.error(f"❌ Processor error: {e}")
+            logger.error(f"Processor error: {e}")
             raise
         finally:
             # Final processing
@@ -477,11 +473,11 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='News Processor: Kafka to SQL Server')
-    parser.add_argument('--sql-server', default=r'(local)\SQLEXPRESS', help='SQL Server host')
+    parser.add_argument('--sql-server', default='192.168.0.108', help='SQL Server host')
     parser.add_argument('--sql-port', type=int, default=1433, help='SQL Server port')
-    parser.add_argument('--sql-database', default='news_analytics', help='Database name')
-    parser.add_argument('--sql-user', default=None, help='SQL Server username (optional for Windows auth)')
-    parser.add_argument('--sql-password', default=None, help='SQL Server password (optional for Windows auth)')
+    parser.add_argument('--sql-database', default='Streaming', help='Database name')
+    parser.add_argument('--sql-user', default="sa", help='SQL Server username (optional for Windows auth)')
+    parser.add_argument('--sql-password', default="YourStrong@Password123", help='SQL Server password (optional for Windows auth)')
     parser.add_argument('--batch-size', type=int, default=100, help='Batch size')
     parser.add_argument('--commit-interval', type=int, default=30, help='Commit interval (seconds)')
     
@@ -505,7 +501,7 @@ def main():
         processor.connect()
         processor.run()
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}")
+        logger.error(f" Fatal error: {e}")
         sys.exit(1)
 
 

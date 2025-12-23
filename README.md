@@ -1,5 +1,3 @@
-# flight-analystics
-
 # Quick Start
 
 - Khởi động FastAPI:

@@ -12,3 +12,11 @@ __pycache__/
 .airflow_win
 .airflow
 local-data
+
+venv/
+
+*.csv
+
+.env
+
+test.*

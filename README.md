@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Quick Start
 
 - Khởi động FastAPI:
@@ -16,6 +15,3 @@ python main.py
 ```
 
 Lưu ý: chỉnh tham số năm/tháng trong `internal-database/src/main.py`
-=======
-# flight-analystics
->>>>>>> origin/main
